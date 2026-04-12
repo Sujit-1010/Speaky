@@ -1,0 +1,18 @@
+/* Hide Contact link from the navbar */
+nav a[href="/contact"] {
+  display: none !important;
+}
+
+/* Streak popup animations */
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+@keyframes slideUp {
+  from { opacity: 0; transform: translateY(50px) scale(0.9); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+@keyframes bounceEmoji {
+  from { transform: translateY(0); }
+  to { transform: translateY(-10px); }
+}

@@ -1,0 +1,36 @@
+# Node & package managers
+node_modules/
+pnpm-lock.yaml
+yarn.lock
+
+# Build outputs
+.dist/
+dist/
+build/
+.vercel_build_output/
+.vercel/
+
+# Env files
+.env
+.env.*
+*.local
+
+# Logs
+npm-debug.log*
+//
+yarn-debug.log*
+pnpm-debug.log*
+
+# Tooling caches
+.eslintcache
+.stylelintcache
+.cache/
+
+# OS/editor
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+
+# Misc
+coverage/

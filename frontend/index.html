@@ -1,0 +1,34 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" href="/favicon.ico" sizes="any" />
+    <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png" />
+    <link rel="icon" type="image/png" sizes="16x16" href="/favicon-16x16.png" />
+    <link rel="icon" type="image/png" href="/logo.png" />
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#0f172a" />
+    <link rel="manifest" href="/site.webmanifest" />
+    <title>SpeakUp</title>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script>
+      // Optional: set backend API base at runtime for cross-network testing
+      // You can run in console: localStorage.setItem('api_base_url','https://your-backend.ngrok.app')
+      (function () {
+        try {
+          var v = localStorage.getItem('api_base_url');
+          if (!v) {
+            var h = window.location && window.location.hostname ? String(window.location.hostname) : '';
+            var isLocal = (h === 'localhost' || h === '127.0.0.1');
+            if (!isLocal) v = 'https://gdhub.onrender.com';
+          }
+          if (v) window.__API_BASE_URL__ = v;
+        } catch (e) {}
+      })();
+    </script>
+    <script type="module" src="/src/main.jsx"></script>
+  </body>
+</html>
