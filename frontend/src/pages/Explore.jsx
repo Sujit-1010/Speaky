@@ -98,44 +98,6 @@ export default function Explore() {
           })}
         </div>
 
-        {/* Featured Section */}
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.3 }}
-          className="mt-12"
-        >
-          <ClayCard className="bg-gradient-to-br from-purple-100 via-blue-100 to-pink-100">
-            <div className="flex flex-col md:flex-row items-center justify-between gap-6">
-              <div className="flex-1">
-                <h2 className="text-3xl font-bold mb-3 gradient-text">Why Practice with GDHub?</h2>
-                <ul className="space-y-2 text-gray-700">
-                  <li className="flex items-center gap-2">
-                    <span className="w-2 h-2 bg-purple-500 rounded-full"></span>
-                    AI-powered feedback and analysis
-                  </li>
-                  <li className="flex items-center gap-2">
-                    <span className="w-2 h-2 bg-blue-500 rounded-full"></span>
-                    Real-time performance tracking
-                  </li>
-                  <li className="flex items-center gap-2">
-                    <span className="w-2 h-2 bg-pink-500 rounded-full"></span>
-                    Gamified learning experience
-                  </li>
-                  <li className="flex items-center gap-2">
-                    <span className="w-2 h-2 bg-orange-500 rounded-full"></span>
-                    Connect with peers worldwide
-                  </li>
-                </ul>
-              </div>
-              <div className="animate-float">
-                <div className="w-32 h-32 rounded-full bg-gradient-to-br from-purple-400 to-blue-500 flex items-center justify-center shadow-2xl">
-                  <Bot className="w-16 h-16 text-white" />
-                </div>
-              </div>
-            </div>
-          </ClayCard>
-        </motion.div>
       </div>
     </div>
   );

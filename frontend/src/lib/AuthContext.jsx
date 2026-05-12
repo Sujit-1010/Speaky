@@ -1,7 +1,7 @@
 import { api } from '@/api/apiClient';
 import { createContext, useContext, useEffect, useState } from 'react';
 
-const AuthContext = createContext();
+const AuthContext = createContext(null);
 
 export const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(null);
@@ -76,19 +76,16 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
-  const logout = (shouldRedirect = true) => {
+  const logout = async () => {
     setUser(null);
     setIsAuthenticated(false);
+    setAuthError(null);
     sessionStorage.removeItem('streakPopupShown');
     sessionStorage.removeItem('pendingStreakPopup');
-    
-    if (shouldRedirect) {
-      // Use the SDK's logout method which handles token cleanup and redirect
-      api.auth.logout(window.location.href);
-    } else {
-      // Just remove the token without redirect
-      api.auth.logout();
-    }
+    // Hit backend to clear the session cookie
+    try { await api.auth.logout(); } catch { /* ignore */ }
+    // Always redirect to /Login after logout
+    window.location.href = '/Login';
   };
 
   const navigateToLogin = () => {

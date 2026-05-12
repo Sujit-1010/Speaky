@@ -16,6 +16,7 @@ export default function Leaderboard() {
   const [myProfile, setMyProfile] = useState(null);
   const [pendingOut, setPendingOut] = useState([]); // requests I've sent
   const [pendingIn, setPendingIn] = useState([]);  // requests to me
+  const [isLoading, setIsLoading] = useState(true); // Prevents empty-state flicker
 
   useEffect(() => {
     loadData();
@@ -71,6 +72,8 @@ export default function Leaderboard() {
       setProfiles(deduped);
     } catch (error) {
       console.error('Error loading data:', error);
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -183,7 +186,17 @@ export default function Leaderboard() {
         </motion.div>
 
         {/* Top 3 Podium */}
-        {profiles.length > 0 ? (
+        {isLoading ? (
+          // Skeleton Podium — prevents the "No active users" flash
+          <div className="flex items-end justify-center gap-3 sm:gap-6 mb-12 px-2 animate-pulse">
+            {[52, 64, 44].map((h, i) => (
+              <div key={i} className="flex flex-col items-center">
+                <div className="w-20 h-20 rounded-full bg-gray-200 mb-4" />
+                <div className={`w-32 sm:w-40 rounded-t-3xl bg-gray-200`} style={{ height: `${h * 4}px` }} />
+              </div>
+            ))}
+          </div>
+        ) : profiles.length > 0 ? (
           <div className="flex items-end justify-center gap-3 sm:gap-6 mb-12 px-2">
             {[1, 0, 2].map((actualIndex, displayIndex) => {
               const actualProfile = profiles[actualIndex];
@@ -300,10 +313,25 @@ export default function Leaderboard() {
             </h2>
             <div className="flex items-center gap-2 text-sm text-gray-500">
               <Flame className="w-4 h-4 text-orange-500" />
-              <span>{profiles.length} players</span>
+              <span>{isLoading ? '…' : `${profiles.length} players`}</span>
             </div>
           </div>
-          {profiles.length === 0 ? (
+          {isLoading ? (
+            // Skeleton rows while fetching
+            <div className="space-y-3 animate-pulse">
+              {[...Array(5)].map((_, i) => (
+                <div key={i} className="flex items-center gap-3 p-3 rounded-2xl bg-gray-100">
+                  <div className="w-9 h-9 rounded-xl bg-gray-200 flex-shrink-0" />
+                  <div className="w-11 h-11 rounded-full bg-gray-200 flex-shrink-0" />
+                  <div className="flex-1 space-y-2">
+                    <div className="h-4 bg-gray-200 rounded w-32" />
+                    <div className="h-3 bg-gray-200 rounded w-20" />
+                  </div>
+                  <div className="w-10 h-6 bg-gray-200 rounded" />
+                </div>
+              ))}
+            </div>
+          ) : profiles.length === 0 ? (
             <div className="text-center py-12 text-gray-500">
               No active users to display.
             </div>

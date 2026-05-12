@@ -13,6 +13,7 @@ export default function Dashboard() {
   const [recentSessions, setRecentSessions] = useState([]);
   const [showAllActivity, setShowAllActivity] = useState(false);
   const [streakPopup, setStreakPopup] = useState(null);
+  const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
     loadData();
@@ -125,6 +126,8 @@ export default function Dashboard() {
       setRecentSessions(allSessions);
     } catch (error) {
       console.error('Error loading data:', error);
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -195,25 +198,37 @@ export default function Dashboard() {
               </div>
             </div>
             
+            {/* Stats pills: skeleton while loading, real data after */}
             <div className="flex flex-wrap gap-2 sm:gap-3">
-              <div className="px-4 sm:px-6 py-2 sm:py-3 rounded-full bg-white shadow-md border-2 border-gray-100 flex items-center gap-2">
-                <div className="w-2.5 h-2.5 rounded-full bg-green-500"></div>
-                <span className="font-bold text-gray-700 text-sm sm:text-base">Level {profile?.level || 1}</span>
-              </div>
-              <div className="px-4 sm:px-6 py-2 sm:py-3 rounded-full bg-gradient-to-r from-yellow-50 to-orange-50 shadow-md border-2 border-yellow-200 flex items-center gap-2">
-                <Sparkles className="w-4 h-4 text-yellow-600" />
-                <span className="font-bold text-gray-700 text-sm sm:text-base">{profile?.totalXP || user?.totalXP || 0} XP</span>
-              </div>
-              <div className={`px-4 sm:px-6 py-2 sm:py-3 rounded-full shadow-md border-2 flex items-center gap-2 ${
-                (user?.streak || 0) > 0 
-                  ? 'bg-gradient-to-r from-orange-50 to-red-50 border-orange-200' 
-                  : 'bg-gray-50 border-gray-200'
-              }`}>
-                <span className={`text-base sm:text-lg ${(user?.streak || 0) > 0 ? '' : 'opacity-50 grayscale'}`}>🔥</span>
-                <span className={`font-bold text-sm sm:text-base ${(user?.streak || 0) > 0 ? 'text-orange-600' : 'text-gray-500'}`}>
-                  {user?.streak || 0} Day Streak
-                </span>
-              </div>
+              {isLoading ? (
+                // Skeleton pills
+                <>
+                  <div className="px-6 py-3 rounded-full bg-gray-100 animate-pulse w-28 h-10" />
+                  <div className="px-6 py-3 rounded-full bg-gray-100 animate-pulse w-24 h-10" />
+                  <div className="px-6 py-3 rounded-full bg-gray-100 animate-pulse w-32 h-10" />
+                </>
+              ) : (
+                <>
+                  <div className="px-4 sm:px-6 py-2 sm:py-3 rounded-full bg-white shadow-md border-2 border-gray-100 flex items-center gap-2">
+                    <div className="w-2.5 h-2.5 rounded-full bg-green-500"></div>
+                    <span className="font-bold text-gray-700 text-sm sm:text-base">Level {profile?.level || 1}</span>
+                  </div>
+                  <div className="px-4 sm:px-6 py-2 sm:py-3 rounded-full bg-gradient-to-r from-yellow-50 to-orange-50 shadow-md border-2 border-yellow-200 flex items-center gap-2">
+                    <Sparkles className="w-4 h-4 text-yellow-600" />
+                    <span className="font-bold text-gray-700 text-sm sm:text-base">{profile?.totalXP || user?.totalXP || 0} XP</span>
+                  </div>
+                  <div className={`px-4 sm:px-6 py-2 sm:py-3 rounded-full shadow-md border-2 flex items-center gap-2 ${
+                    (user?.streak || 0) > 0
+                      ? 'bg-gradient-to-r from-orange-50 to-red-50 border-orange-200'
+                      : 'bg-gray-50 border-gray-200'
+                  }`}>
+                    <span className={`text-base sm:text-lg ${(user?.streak || 0) > 0 ? '' : 'opacity-50 grayscale'}`}>🔥</span>
+                    <span className={`font-bold text-sm sm:text-base ${(user?.streak || 0) > 0 ? 'text-orange-600' : 'text-gray-500'}`}>
+                      {user?.streak || 0} Day Streak
+                    </span>
+                  </div>
+                </>
+              )}
             </div>
           </div>
         </motion.div>
@@ -240,23 +255,23 @@ export default function Dashboard() {
             </motion.div>
           </Link>
 
-          <Link to={createPageUrl('Leaderboard')}>
-            <motion.div whileHover={{ y: -4 }} className="bg-white rounded-3xl p-5 sm:p-6 shadow-lg border-2 border-gray-100 hover:border-pink-200 hover:shadow-xl transition-all h-full">
-              <div className="w-12 h-12 sm:w-14 sm:h-14 mb-3 sm:mb-4 rounded-2xl bg-gradient-to-br from-pink-400 to-red-500 flex items-center justify-center shadow-lg">
-                <Award className="w-6 h-6 sm:w-7 sm:h-7 text-white" />
+          <Link to={createPageUrl('AIInterviewHub')}>
+            <motion.div whileHover={{ y: -4 }} className="bg-white rounded-3xl p-5 sm:p-6 shadow-lg border-2 border-gray-100 hover:border-green-200 hover:shadow-xl transition-all h-full">
+              <div className="w-12 h-12 sm:w-14 sm:h-14 mb-3 sm:mb-4 rounded-2xl bg-gradient-to-br from-green-400 to-teal-500 flex items-center justify-center shadow-lg">
+                <Bot className="w-6 h-6 sm:w-7 sm:h-7 text-white" />
               </div>
-              <h3 className="font-black text-base sm:text-lg mb-1 sm:mb-2">Leaderboard</h3>
-              <p className="text-xs sm:text-sm text-gray-600 leading-snug">See where you rank globally</p>
+              <h3 className="font-black text-base sm:text-lg mb-1 sm:mb-2">AI Interview</h3>
+              <p className="text-xs sm:text-sm text-gray-600 leading-snug">Practice with AI-powered interviews</p>
             </motion.div>
           </Link>
 
-          <Link to={createPageUrl('Progress')}>
-            <motion.div whileHover={{ y: -4 }} className="bg-white rounded-3xl p-5 sm:p-6 shadow-lg border-2 border-gray-100 hover:border-yellow-200 hover:shadow-xl transition-all h-full">
-              <div className="w-12 h-12 sm:w-14 sm:h-14 mb-3 sm:mb-4 rounded-2xl bg-gradient-to-br from-yellow-400 to-orange-500 flex items-center justify-center shadow-lg">
-                <TrendingUp className="w-6 h-6 sm:w-7 sm:h-7 text-white" />
+          <Link to={createPageUrl('ExtemporePractice')}>
+            <motion.div whileHover={{ y: -4 }} className="bg-white rounded-3xl p-5 sm:p-6 shadow-lg border-2 border-gray-100 hover:border-orange-200 hover:shadow-xl transition-all h-full">
+              <div className="w-12 h-12 sm:w-14 sm:h-14 mb-3 sm:mb-4 rounded-2xl bg-gradient-to-br from-orange-400 to-red-500 flex items-center justify-center shadow-lg">
+                <Mic className="w-6 h-6 sm:w-7 sm:h-7 text-white" />
               </div>
-              <h3 className="font-black text-base sm:text-lg mb-1 sm:mb-2">My Progress</h3>
-              <p className="text-xs sm:text-sm text-gray-600 leading-snug">Track your improvement journey</p>
+              <h3 className="font-black text-base sm:text-lg mb-1 sm:mb-2">Extempore</h3>
+              <p className="text-xs sm:text-sm text-gray-600 leading-snug">Speak on any topic, improve fluency</p>
             </motion.div>
           </Link>
         </div>
@@ -264,7 +279,21 @@ export default function Dashboard() {
         {/* Recent Activity */}
         <div className="bg-white rounded-3xl p-6 sm:p-8 shadow-lg border-2 border-gray-100">
           <h3 className="text-xl sm:text-2xl font-black mb-4 sm:mb-6">Recent Activity</h3>
-          {recentSessions.length > 0 ? (
+          {isLoading ? (
+            // Skeleton activity rows
+            <div className="space-y-3 animate-pulse">
+              {[...Array(3)].map((_, i) => (
+                <div key={i} className="p-4 rounded-2xl flex items-center gap-4 bg-gray-50">
+                  <div className="w-12 h-12 rounded-xl bg-gray-200 flex-shrink-0" />
+                  <div className="flex-1 space-y-2">
+                    <div className="h-4 bg-gray-200 rounded w-40" />
+                    <div className="h-3 bg-gray-200 rounded w-24" />
+                  </div>
+                  <div className="w-16 h-3 bg-gray-200 rounded" />
+                </div>
+              ))}
+            </div>
+          ) : recentSessions.length > 0 ? (
             <div className="space-y-3">
               {displayedActivity.map((session) => {
                 const typeConfig = {
