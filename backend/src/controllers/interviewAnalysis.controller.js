@@ -1,5 +1,5 @@
 const AIInterviewAnalysis = require('../models/AIInterviewAnalysis')
-const { analyzeInterview } = require('../services/gemini.service')
+const { analyzeInterview } = require('../services/groq.service')
 const { awardXP } = require('../services/xp.service')
 
 async function startInterviewAnalysis(req, res) {

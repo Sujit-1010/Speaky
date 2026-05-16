@@ -1,26 +1,13 @@
 const express = require('express');
 const GDRoom = require('../models/GDRoom');
 const WaitingUser = require('../models/WaitingUser');
+const { getRandomTopic } = require('../services/topicGenerator.service');
 
 const router = express.Router();
 
 // Global GD auto-matching now uses MongoDB collections (WaitingUser + GDRoom)
 // so that the queue and rooms are shared across all backend instances.
 const GROUP_SIZE = 3;
-
-function getRandomTopic() {
-  // TODO: Replace with proper topic pool or DB-backed topics
-  const topics = [
-    'The impact of artificial intelligence on employment',
-    'Social media regulation and freedom of speech',
-    'Climate change and individual responsibility',
-    'Remote work vs office culture',
-    'Is social media doing more harm than good?',
-    'The future of online education',
-    'Data privacy in a connected world',
-  ];
-  return topics[Math.floor(Math.random() * topics.length)];
-}
 
 // Find an active GLOBAL GDRoom from MongoDB that contains the given user
 // and where the user has not explicitly left via /leave-room.

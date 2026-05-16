@@ -147,34 +147,58 @@ export default function ExtemporeRoom() {
     };
   }, [cameraOn, phase]);
 
+  const [isAnalyzing, setIsAnalyzing] = useState(false);
+
   const handleComplete = async () => {
     try {
+      setIsAnalyzing(true);
       const user = await api.auth.me();
       const uid = (user && (user.id || user.email)) || 'guest';
       try { recogRef.current && recogRef.current.stop(); } catch {}
       const finalTranscript = (transcript + (interim ? ` ${interim}` : '')).trim();
+      const speakingDuration = 300 - timer;
+
+      // Save the session with the transcript and status = 'processing'
       const session = await api.entities.ExtemporeSession.create({
         user_id: uid,
         topic: topic,
         difficulty: 'medium',
         category: 'General',
         prep_time: 30,
-        speaking_duration: 300 - timer,
+        speaking_duration: speakingDuration,
+        transcript: finalTranscript,
+        status: 'processing',
         filler_words_count: 0,
         filler_words: [],
         strengths: [],
         improvements: [],
       });
 
+      // Save the raw message too
       try {
         await api.entities.ExtemporeMessage.create({ session_id: session.id, user_id: uid, text: finalTranscript });
       } catch {}
 
+      // Kick off background AI analysis pipeline
+      try {
+        await api.extemporeAnalysis.start({
+          sessionId: session.id || session._id,
+          userId: uid,
+          transcript: finalTranscript,
+          topic,
+          duration: speakingDuration,
+        });
+      } catch (err) {
+        console.error('Analysis trigger error:', err);
+      }
+
       navigate(createPageUrl(`ExtemporeFeedback?sessionId=${session.id}`));
     } catch (error) {
       console.error('Error saving session:', error);
+      setIsAnalyzing(false);
     }
   };
+
 
   const formatTime = (seconds) => {
     const mins = Math.floor(seconds / 60);
@@ -190,6 +214,40 @@ export default function ExtemporeRoom() {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-purple-900 via-blue-900 to-indigo-900 flex items-center justify-center p-6">
+      {/* Analyzing Overlay */}
+      <AnimatePresence>
+        {isAnalyzing && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            className="fixed inset-0 z-50 bg-indigo-950/95 backdrop-blur flex flex-col items-center justify-center gap-6"
+          >
+            <motion.div
+              animate={{ rotate: 360 }}
+              transition={{ repeat: Infinity, duration: 1.2, ease: 'linear' }}
+              className="w-20 h-20 rounded-3xl bg-gradient-to-br from-purple-400 to-blue-500 flex items-center justify-center shadow-2xl shadow-purple-500/40"
+            >
+              <div className="w-10 h-10 border-4 border-white/30 border-t-white rounded-full" />
+            </motion.div>
+            <div className="text-center">
+              <p className="text-white text-2xl font-black mb-2">Analyzing your speech...</p>
+              <p className="text-purple-300 text-sm">AI is evaluating your performance. Please wait.</p>
+            </div>
+            {/* Animated dots */}
+            <div className="flex gap-2">
+              {[0, 1, 2].map((i) => (
+                <motion.div
+                  key={i}
+                  className="w-2.5 h-2.5 rounded-full bg-purple-400"
+                  animate={{ scale: [1, 1.5, 1], opacity: [0.5, 1, 0.5] }}
+                  transition={{ repeat: Infinity, duration: 1.2, delay: i * 0.2 }}
+                />
+              ))}
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
       <div className="max-w-4xl w-full">
         <AnimatePresence mode="wait">
           {phase === 'preparation' && (

@@ -60,15 +60,19 @@ export default function SoloPractice() {
     setPracticeTopics(getRandomTopics(topicPool));
   };
 
+  const PRACTICE_PUBLIC_KEY = /** @type {any} */ (import.meta).env?.VITE_VAPI_PRACTICE_PUBLIC_KEY
+    || /** @type {any} */ (import.meta).env?.VITE_VAPI_PUBLIC_KEY;
+
   const {
     volumeLevel,
     isSessionActive,
     conversation,
     toggleCall,
     stopCall,
+    startCallInline,
     resetConversation,
   } = useVapi({
-    publicKey: /** @type {any} */ (import.meta).env?.VITE_VAPI_PRACTICE_PUBLIC_KEY,
+    publicKey: PRACTICE_PUBLIC_KEY,
     assistantId: /** @type {any} */ (import.meta).env?.VITE_VAPI_PRACTICE_ASSISTANT_ID,
   });
 
@@ -102,7 +106,44 @@ export default function SoloPractice() {
     setSessionStarted(true);
     resetConversation();
     try {
-      toggleCall();
+      // Use a FULL inline assistant config so the Vapi dashboard prompt
+      // is completely bypassed and the AI is locked to the chosen topic.
+      startCallInline({
+        name: 'SpeakUp Practice Coach',
+        firstMessage: `Great choice! Today we're discussing: "${topic}". What's your initial take on this?`,
+        transcriber: {
+          provider: 'deepgram',
+          model: 'nova-2',
+          language: 'en-US',
+        },
+        model: {
+          provider: 'openai',
+          model: 'gpt-4o-mini',
+          messages: [
+            {
+              role: 'system',
+              content: `You are a friendly AI discussion coach. Your ENTIRE purpose in this conversation is to discuss ONE topic and nothing else.
+
+TOPIC: "${topic}"
+
+STRICT RULES YOU MUST NEVER BREAK:
+1. ONLY discuss "${topic}". This is the ONLY topic allowed.
+2. You are a curious DISCUSSION PARTNER, NOT an interviewer. Never say words like "candidate", "interview", "hire", "job".
+3. Ask ONE short follow-up question per turn.
+4. Keep every response under 3 sentences. The user must do most of the talking.
+5. If the user strays off-topic, bring them back to "${topic}" immediately.
+6. Share brief, interesting perspectives to keep the conversation flowing.
+7. React naturally to what the user said before asking your next question.
+8. Remember: this is a practice discussion to help the user improve their speaking skills.`,
+            },
+          ],
+          temperature: 0.7,
+        },
+        voice: {
+          provider: 'openai',
+          voiceId: 'alloy',
+        },
+      });
     } catch (e) {
       console.error('Error starting Vapi practice session:', e);
     }

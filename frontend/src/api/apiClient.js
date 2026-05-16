@@ -434,6 +434,12 @@ const rooms = {
 };
 
 // Final export including tournaments/rooms
-api = { ...api, tournaments, rooms, interviewAnalysis };
+const extemporeAnalysis = {
+  async start(data) {
+    return request('POST', '/api/extempore-analysis/start', data);
+  },
+};
+
+api = { ...api, tournaments, rooms, interviewAnalysis, extemporeAnalysis };
 export { api };
 

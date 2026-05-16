@@ -2,7 +2,7 @@ const Analysis = require('../models/Analysis');
 const config = require('../config');
 const fs = require('fs');
 const { transcribeAudio } = require('../services/assemblyai.service');
-const { analyzeWithGemini } = require('../services/gemini.service');
+const { analyzeWithGroq } = require('../services/groq.service');
 const { calculateMetrics, calculateScores, generateStrengthsAndImprovements, calculateParticipationScoreFromPercent, calculateOverallScore } = require('../services/scoring.service');
 const { uploadAudio: uploadAudioToCloudinary } = require('../services/cloudinary.service');
 
@@ -135,7 +135,7 @@ async function runAnalysisPipeline({ analysisId, sessionId, audioUrl, topic, dur
         let gemini;
         let geminiUsed = true;
         try {
-            gemini = await analyzeWithGemini(transcript, topic);
+            gemini = await analyzeWithGroq(transcript, topic);
         } catch {
             geminiUsed = false;
             

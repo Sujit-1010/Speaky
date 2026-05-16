@@ -99,6 +99,13 @@ const useVapi = (options = {}) => {
     await vapiRef.current.start(assistantId, overrides);
   };
 
+  // Starts a Vapi call with a FULL inline assistant config.
+  // This completely bypasses the dashboard assistant — nothing from the dashboard can interfere.
+  const startCallInline = async (assistantConfig) => {
+    if (!vapiRef.current) return;
+    await vapiRef.current.start(assistantConfig);
+  };
+
   const stopCall = async () => {
     if (!vapiRef.current) return;
     await vapiRef.current.stop();
@@ -127,6 +134,7 @@ const useVapi = (options = {}) => {
     conversation,
     toggleCall,
     stopCall,
+    startCallInline,
     resetConversation,
   };
 };

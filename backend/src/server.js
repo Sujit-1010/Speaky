@@ -9,6 +9,8 @@ const config = require('./config');
 const connectDB = require('./db');
 const createCrudRouter = require('./routes/crud');
 const { sendTournamentRegistrationEmail, sendJudgeInviteEmail, sendTimeSlotEmail } = require('./utils/mailer');
+const cron = require('node-cron');
+const { refreshTopics } = require('./services/topicGenerator.service');
 
 const User = require('./models/User');
 const UserProfile = require('./models/UserProfile');
@@ -36,6 +38,7 @@ const notificationsRoutes = require('./routes/notifications');
 const globalGdRoutes = require('./routes/globalGd');
 const analysisRoutes = require('./routes/analysis.routes');
 const interviewAnalysisRoutes = require('./routes/interviewAnalysis.routes');
+const extemporeAnalysisRoutes = require('./routes/extemporeAnalysis.routes');
 const auth = require('./middleware/auth');
 const { sendPushToUser } = require('./utils/pushNotifications');
 
@@ -122,6 +125,7 @@ app.use('/api/zego', tokenRoutes);
 app.use('/api/push', pushRoutes);
 app.use('/api/ai-interview-sessions', createCrudRouter(AIInterviewSession));
 app.use('/api/interview-analysis', interviewAnalysisRoutes);
+app.use('/api/extempore-analysis', extemporeAnalysisRoutes);
 
 app.post('/api/friend-requests/:id/accept', async (req, res) => {
     const fr = await FriendRequest.findById(req.params.id);
@@ -589,6 +593,14 @@ const { Server } = require('socket.io');
 
 const start = async () => {
     await connectDB(config.mongoUri);
+
+    // Initial fetch of topics
+    refreshTopics();
+
+    // Schedule to fetch topics every 12 hours
+    cron.schedule('0 */12 * * *', () => {
+        refreshTopics();
+    });
 
     const server = http.createServer(app);
     const io = new Server(server, {
