@@ -31,14 +31,15 @@ async function startInterviewAnalysis(req, res) {
       message: 'Analysis started'
     })
 
-    // Run pipeline in background without awaiting
+    // Run pipeline in background — intentionally not awaited.
+    // .catch() ensures rejections are logged instead of silently lost.
     runInterviewPipeline(
       analysis._id,
       req.app,
       userId, messages,
       interviewType, company, role,
       selectedTopics, resumeText
-    )
+    ).catch((err) => console.error('[interview-pipeline] unhandled rejection — analysisId:', analysis._id, err))
 
   } catch (err) {
     console.error('Start interview analysis error:', err)
@@ -175,7 +176,8 @@ async function getInterviewHistory(req, res) {
       .limit(20);
     res.json(sessions);
   } catch (err) {
-    res.status(500).json({ message: err.message });
+    const msg = (config.nodeEnv !== 'production' && err?.message) ? err.message : 'Server error'
+    res.status(500).json({ message: msg })
   }
 }
 

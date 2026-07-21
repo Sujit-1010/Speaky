@@ -2,17 +2,7 @@ const express = require('express');
 const Notification = require('../models/Notification');
 const { sendPushToUser } = require('../utils/pushNotifications');
 
-function toPlain(doc) {
-    if (!doc) return null;
-    const obj = doc.toObject ? doc.toObject() : doc;
-    const id = (obj._id || obj.id || '').toString();
-    const createdAt = obj.createdAt || obj.created_date || obj.created_at;
-    const plain = { ...obj, id };
-    if (createdAt) plain.created_date = createdAt;
-    delete plain._id;
-    delete plain.__v;
-    return plain;
-}
+const { toPlain } = require('./crud');
 
 const router = express.Router();
 
