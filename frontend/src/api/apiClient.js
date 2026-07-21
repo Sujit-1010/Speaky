@@ -190,6 +190,18 @@ const tournaments = {
     if (accessToken) headers['x-access-token'] = accessToken;
     return post(`/api/tournaments/${tournamentId}/restart`, {}, headers);
   },
+  /**
+   * Fetches tournament + registrations + rooms in a single request.
+   * Used by Organiser.jsx and JudgePanel.jsx (magic-link pages).
+   * No JWT required — the accessToken IS the credential.
+   */
+  async getPanelData({ tournamentId, accessToken }) {
+    if (!tournamentId) throw new Error('Missing tournamentId');
+    if (!accessToken) throw new Error('Missing accessToken');
+    const params = new URLSearchParams();
+    params.set('token', accessToken);
+    return get(`/api/tournaments/${tournamentId}/panel-data?${params.toString()}`);
+  },
 };
 
 function ensureGuest() {

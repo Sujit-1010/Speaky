@@ -1,4 +1,5 @@
 const AIInterviewAnalysis = require('../models/AIInterviewAnalysis')
+const config = require('../config')
 const { analyzeInterview } = require('../services/groq.service')
 const { awardXP } = require('../services/xp.service')
 
@@ -41,7 +42,8 @@ async function startInterviewAnalysis(req, res) {
 
   } catch (err) {
     console.error('Start interview analysis error:', err)
-    res.status(500).json({ message: err.message })
+    const msg = (config.nodeEnv !== 'production' && err?.message) ? err.message : 'Server error'
+    res.status(500).json({ message: msg })
   }
 }
 
@@ -159,7 +161,8 @@ async function getInterviewAnalysis(req, res) {
 
     res.json(analysis)
   } catch (err) {
-    res.status(500).json({ message: err.message })
+    const msg = (config.nodeEnv !== 'production' && err?.message) ? err.message : 'Server error'
+    res.status(500).json({ message: msg })
   }
 }
 

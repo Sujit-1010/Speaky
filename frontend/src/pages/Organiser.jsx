@@ -50,23 +50,30 @@ export default function Organiser() {
   const load = async (showSpinner = false) => {
     try {
       if (showSpinner) setLoading(true);
-      let a = null;
+
       if (accessToken) {
-        a = await api.tournaments.validateAccess({ tournamentId, accessToken });
+        // Magic-link path: single endpoint returns auth + all data in one shot.
+        const panel = await api.tournaments.getPanelData({ tournamentId, accessToken });
+        setAuth({ valid: true, role: panel.tokenRole, email: panel.tokenEmail, name: panel.tokenName });
+        setTournament(panel.tournament || null);
+        setRegistrations(panel.registrations || []);
+        setRooms(panel.rooms || []);
       } else {
+        // Logged-in host path: validate session then load data with JWT.
+        let a = { valid: false };
         try {
           a = await api.tournaments.validateOrganiserSession(tournamentId);
         } catch (e) {
           a = { valid: false };
         }
+        setAuth(a);
+        const [t] = await api.entities.Tournament.filter({ id: tournamentId });
+        setTournament(t || null);
+        const regs = await api.entities.TournamentRegistration.filter({ tournament_id: tournamentId });
+        setRegistrations(regs);
+        const rms = await api.entities.GDRoom.filter({ tournament_id: tournamentId });
+        setRooms(rms);
       }
-      setAuth(a);
-      const [t] = await api.entities.Tournament.filter({ id: tournamentId });
-      setTournament(t || null);
-      const regs = await api.entities.TournamentRegistration.filter({ tournament_id: tournamentId });
-      setRegistrations(regs);
-      const rms = await api.entities.GDRoom.filter({ tournament_id: tournamentId });
-      setRooms(rms);
     } catch (e) {
       setAuth({ valid: false, role: null, email: null, name: null });
     } finally {
@@ -114,7 +121,7 @@ export default function Organiser() {
         byGroup.get(gn).push(r);
       }
     }
-    const existing = await api.entities.GDRoom.filter({ tournament_id: tournamentId });
+    const existing = rooms;
     const existingCodes = new Set(existing.map(r => r.room_code));
     const promises = [];
     let idx = 0;

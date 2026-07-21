@@ -1,4 +1,5 @@
 const ExtemporeSession = require('../models/ExtemporeSession');
+const config = require('../config');
 const { analyzeExtempore } = require('../services/groq.service');
 const { awardXP } = require('../services/xp.service');
 
@@ -18,7 +19,8 @@ async function startExtemporeAnalysis(req, res) {
 
   } catch (err) {
     console.error('Start extempore analysis error:', err);
-    res.status(500).json({ message: err.message });
+    const msg = (config.nodeEnv !== 'production' && err?.message) ? err.message : 'Server error';
+    res.status(500).json({ message: msg });
   }
 }
 

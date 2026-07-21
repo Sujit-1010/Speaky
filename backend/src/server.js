@@ -39,6 +39,7 @@ const globalGdRoutes = require('./routes/globalGd');
 const analysisRoutes = require('./routes/analysis.routes');
 const interviewAnalysisRoutes = require('./routes/interviewAnalysis.routes');
 const extemporeAnalysisRoutes = require('./routes/extemporeAnalysis.routes');
+const tournamentPanelRoutes = require('./routes/tournamentPanel.routes');
 const auth = require('./middleware/auth');
 const { sendPushToUser } = require('./utils/pushNotifications');
 
@@ -90,9 +91,7 @@ app.use(rateLimit({
     skip: (req) => {
         try {
             const url = String(req.originalUrl || req.url || '');
-            return url.startsWith('/api/analysis') ||
-                   url.startsWith('/api/interview-analysis') ||
-                   url.startsWith('/api/gd-rooms') ||
+            return url.startsWith('/api/gd-rooms') ||
                    url.startsWith('/api/auth/me');
         } catch {
             return false;
@@ -100,16 +99,35 @@ app.use(rateLimit({
     }
 }));
 
+// Stricter limiter for routes that trigger paid AI/STT/storage calls.
+// 10 requests per user per 15 minutes. Keyed by userId from request body/query
+// (body is already parsed by express.json above), falling back to IP.
+const aiRateLimit = rateLimit({
+    windowMs: 15 * 60 * 1000,
+    max: 10,
+    keyGenerator: (req) => {
+        // req.user is set by auth middleware which runs before this limiter.
+        // Fall back to IP only if user is somehow absent (should not happen).
+        return String(req.user?.id || req.ip || 'unknown');
+    },
+    message: { message: 'Too many AI analysis requests. Please wait 15 minutes before trying again.' },
+    standardHeaders: true,
+    legacyHeaders: false,
+});
+
 app.get('/health', (req, res) => res.json({ ok: true }));
 
 app.use('/api/auth', authRoutes);
 app.use('/api/global-gd', globalGdRoutes);
-app.use('/api/analysis', analysisRoutes);
+app.use('/api/analysis', auth, aiRateLimit, analysisRoutes);
 
 app.use('/api/users', createCrudRouter(User));
 app.use('/api/user-profiles', createCrudRouter(UserProfile));
 app.use('/api/friend-requests', createCrudRouter(FriendRequest));
 app.use('/api/notifications', notificationsRoutes);
+// Panel-data route MUST be mounted before the generic CRUD router for /api/tournaments
+// so that /api/tournaments/:id/panel-data is matched here before /:id swallows it.
+app.use('/api/tournaments', tournamentPanelRoutes);
 app.use('/api/tournaments', createCrudRouter(Tournament));
 app.use('/api/tournament-registrations', createCrudRouter(TournamentRegistration));
 app.use('/api/gd-rooms', createCrudRouter(GDRoom));
@@ -124,8 +142,8 @@ app.use('/api/solo-practice-sessions', createCrudRouter(SoloPracticeSession));
 app.use('/api/zego', tokenRoutes);
 app.use('/api/push', pushRoutes);
 app.use('/api/ai-interview-sessions', createCrudRouter(AIInterviewSession));
-app.use('/api/interview-analysis', interviewAnalysisRoutes);
-app.use('/api/extempore-analysis', extemporeAnalysisRoutes);
+app.use('/api/interview-analysis', auth, aiRateLimit, interviewAnalysisRoutes);
+app.use('/api/extempore-analysis', auth, aiRateLimit, extemporeAnalysisRoutes);
 
 app.post('/api/friend-requests/:id/accept', async (req, res) => {
     const fr = await FriendRequest.findById(req.params.id);

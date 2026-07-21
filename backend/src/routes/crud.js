@@ -1,4 +1,5 @@
 const express = require('express');
+const auth = require('../middleware/auth');
 
 function toPlain(doc) {
     if (!doc) return null;
@@ -14,16 +15,24 @@ function toPlain(doc) {
 
 function createCrudRouter(Model) {
     const router = express.Router();
-    router.get('/', async (req, res) => {
-        const filter = { ...req.query };
-        Object.keys(filter).forEach((k) => { if (filter[k] === 'true') filter[k] = true; if (filter[k] === 'false') filter[k] = false; });
-        const items = await Model.find(filter).sort(req.query.sort || '-createdAt');
-        res.json(items.map(toPlain));
+    router.get('/', auth, async (req, res) => {
+        try {
+            const filter = { ...req.query };
+            Object.keys(filter).forEach((k) => { if (filter[k] === 'true') filter[k] = true; if (filter[k] === 'false') filter[k] = false; });
+            const items = await Model.find(filter).sort(req.query.sort || '-createdAt');
+            res.json(items.map(toPlain));
+        } catch (e) {
+            res.status(500).json({ message: 'Server error' });
+        }
     });
-    router.get('/:id', async (req, res) => {
-        const item = await Model.findById(req.params.id);
-        if (!item) return res.status(404).json({ message: 'Not found' });
-        res.json(toPlain(item));
+    router.get('/:id', auth, async (req, res) => {
+        try {
+            const item = await Model.findById(req.params.id);
+            if (!item) return res.status(404).json({ message: 'Not found' });
+            res.json(toPlain(item));
+        } catch (e) {
+            res.status(500).json({ message: 'Server error' });
+        }
     });
     router.post('/', async (req, res) => {
         const created = await Model.create(req.body || {});

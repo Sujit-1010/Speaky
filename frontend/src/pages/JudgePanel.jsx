@@ -31,27 +31,24 @@ export default function JudgePanel() {
   }, [registrations]);
 
   useEffect(() => {
-    load();
-    const id = setInterval(load, 5000);
+    load(true);
+    const id = setInterval(() => load(), 5000);
     return () => clearInterval(id);
-     
   }, [tournamentId, accessToken]);
 
-  const load = async () => {
+
+  const load = async (showSpinner = false) => {
     try {
-      setLoading(true);
-      const a = await api.tournaments.validateAccess({ tournamentId, accessToken });
-      setAuth(a);
-      const [t] = await api.entities.Tournament.filter({ id: tournamentId });
-      setTournament(t || null);
-      const regs = await api.entities.TournamentRegistration.filter({ tournament_id: tournamentId });
-      setRegistrations(regs);
-      const rms = await api.entities.GDRoom.filter({ tournament_id: tournamentId });
-      setRooms(rms);
+      if (showSpinner) setLoading(true);
+      const panel = await api.tournaments.getPanelData({ tournamentId, accessToken });
+      setAuth({ valid: true, role: panel.tokenRole, email: panel.tokenEmail, name: panel.tokenName });
+      setTournament(panel.tournament || null);
+      setRegistrations(panel.registrations || []);
+      setRooms(panel.rooms || []);
     } catch (e) {
       setAuth({ valid: false, role: null, email: null, name: null });
     } finally {
-      setLoading(false);
+      if (showSpinner) setLoading(false);
     }
   };
 
