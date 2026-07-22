@@ -202,24 +202,6 @@ export default function TournamentLobby() {
           topic: `Tournament Round - ${tournament.domain}`,
           tournament_id: tournamentId
         });
-      } else if (tournament.type === 'debate') {
-        await api.entities.DebateRoom.create({
-
-          room_code: roomCode,
-          host_id: tournament.host_id,
-          mode: 'tournament',
-          team_size: tournament.group_size,
-          domain: tournament.domain,
-          duration: tournament.duration,
-          status: 'lobby',
-          participants: group.map(r => ({
-            user_id: r.user_id,
-            name: r.user_name,
-            joined_at: new Date().toISOString()
-          })),
-          topic: `Debate Tournament - ${tournament.domain}`,
-          tournament_id: tournamentId
-        });
       }
     }
     

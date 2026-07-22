@@ -62,7 +62,6 @@ const entityToPath = {
   Tournament: '/api/tournaments',
   TournamentRegistration: '/api/tournament-registrations',
   GDRoom: '/api/gd-rooms',
-  DebateRoom: '/api/debate-rooms',
   GDSession: '/api/gd-sessions',
   ExtemporeSession: '/api/extempore-sessions',
   ExtemporeMessage: '/api/extempore-messages',
@@ -122,7 +121,6 @@ const entities = {
   Tournament: makeEntity(entityToPath.Tournament),
   TournamentRegistration: makeEntity(entityToPath.TournamentRegistration),
   GDRoom: makeEntity(entityToPath.GDRoom),
-  DebateRoom: makeEntity(entityToPath.DebateRoom),
   GDSession: makeEntity(entityToPath.GDSession),
   ExtemporeSession: makeEntity(entityToPath.ExtemporeSession),
   ExtemporeMessage: makeEntity(entityToPath.ExtemporeMessage),
@@ -415,32 +413,6 @@ const rooms = {
       const headers = {};
       if (a.accessToken) headers['x-access-token'] = a.accessToken;
       return post(`/api/gd-rooms/${id}/force-close`, { host_email: a.host_email }, headers);
-    },
-  },
-  debate: {
-    async start(id, args) {
-      const a = args || {};
-      const headers = {};
-      if (a.accessToken) headers['x-access-token'] = a.accessToken;
-      return post(`/api/debate-rooms/${id}/start`, { host_email: a.host_email }, headers);
-    },
-    async stop(id, args) {
-      const a = args || {};
-      const headers = {};
-      if (a.accessToken) headers['x-access-token'] = a.accessToken;
-      return post(`/api/debate-rooms/${id}/stop`, { host_email: a.host_email }, headers);
-    },
-    async restart(id, args) {
-      const a = args || {};
-      const headers = {};
-      if (a.accessToken) headers['x-access-token'] = a.accessToken;
-      return post(`/api/debate-rooms/${id}/restart`, { host_email: a.host_email }, headers);
-    },
-    async forceClose(id, args) {
-      const a = args || {};
-      const headers = {};
-      if (a.accessToken) headers['x-access-token'] = a.accessToken;
-      return post(`/api/debate-rooms/${id}/force-close`, { host_email: a.host_email }, headers);
     },
   },
 };

@@ -8,13 +8,10 @@ import Call from './pages/Call';
 
 import Chat from './pages/Chat';
 import Contact from './pages/Contact';
-import CreateDebateRoom from './pages/CreateDebateRoom';
 import CreateRoom from './pages/CreateRoom';
 import CreateTournament from './pages/CreateTournament';
 import Dashboard from './pages/Dashboard';
-import DebateArena from './pages/DebateArena';
-import DebateLobby from './pages/DebateLobby';
-import DebateRoom from './pages/DebateRoom';
+
 import Explore from './pages/Explore';
 import ExtemporeFeedback from './pages/ExtemporeFeedback';
 import ExtemporePractice from './pages/ExtemporePractice';
@@ -26,7 +23,6 @@ import GDAnalysis from './pages/GDAnalysis';
 import GDRoom from './pages/GDRoom';
 
 import HumanInterviewRoom from './pages/HumanInterviewRoom';
-import JoinDebateRoom from './pages/JoinDebateRoom';
 import JoinRoom from './pages/JoinRoom';
 import JudgePanel from './pages/JudgePanel';
 import Landing from './pages/Landing';
@@ -68,13 +64,8 @@ export const PAGES = {
     "CreateTournament": CreateTournament,
 
     "TournamentLobby": TournamentLobby,
-    "DebateArena": DebateArena,
     "AIInterviewHub": AIInterviewHub,
     "AIInterviewRoom": AIInterviewRoom,
-    "CreateDebateRoom": CreateDebateRoom,
-    "JoinDebateRoom": JoinDebateRoom,
-    "DebateLobby": DebateLobby,
-    "DebateRoom": DebateRoom,
     "About": About,
     "AIInterviewAI": AIInterviewAI,
     "AIInterviewAnalysis": AIInterviewAnalysis,

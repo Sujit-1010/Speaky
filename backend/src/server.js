@@ -20,7 +20,6 @@ const Tournament = require('./models/Tournament');
 const TournamentRegistration = require('./models/TournamentRegistration');
 const TournamentAccessToken = require('./models/TournamentAccessToken');
 const GDRoom = require('./models/GDRoom');
-const DebateRoom = require('./models/DebateRoom');
 const GDSession = require('./models/GDSession');
 const ExtemporeSession = require('./models/ExtemporeSession');
 const AIInterview = require('./models/AIInterview');
@@ -133,7 +132,6 @@ app.use('/api/tournaments', tournamentPanelRoutes);
 app.use('/api/tournaments', createCrudRouter(Tournament));
 app.use('/api/tournament-registrations', createCrudRouter(TournamentRegistration));
 app.use('/api/gd-rooms', createCrudRouter(GDRoom));
-app.use('/api/debate-rooms', createCrudRouter(DebateRoom));
 app.use('/api/gd-sessions', createCrudRouter(GDSession));
 app.use('/api/extempore-sessions', createCrudRouter(ExtemporeSession));
 app.use('/api/ai-interviews', createCrudRouter(AIInterview));
@@ -207,19 +205,6 @@ app.post('/api/gd-rooms/:id/join', auth, async (req, res) => {
 
 app.post('/api/tournaments/:id/register', tournamentController.registerForTournament);
 
-app.post('/api/debate-rooms/:id/join', async (req, res) => {
-    const { user_id, user_name, side } = req.body || {};
-    if (!user_id) return res.status(400).json({ message: 'Missing user_id' });
-    const room = await DebateRoom.findById(req.params.id);
-    if (!room) return res.status(404).json({ message: 'Not found' });
-    const exists = (room.participants || []).some(p => p.user_id === user_id);
-    if (!exists) {
-        const normSide = ['for', 'against', 'neutral'].includes(side) ? side : 'neutral';
-        room.participants.push({ user_id, name: user_name, side: normSide });
-        await room.save();
-    }
-    res.json(room);
-});
 
 app.post('/api/tournaments/:id/start', tournamentController.startTournament);
 
@@ -248,11 +233,7 @@ app.post('/api/gd-rooms/:id/stop', roomController.stopGDRoom);
 app.post('/api/gd-rooms/:id/restart', roomController.restartGDRoom);
 app.post('/api/gd-rooms/:id/force-close', roomController.forceCloseGDRoom);
 
-// Lobby controls for Debate rooms
-app.post('/api/debate-rooms/:id/start', roomController.startDebateRoom);
-app.post('/api/debate-rooms/:id/stop', roomController.stopDebateRoom);
-app.post('/api/debate-rooms/:id/restart', roomController.restartDebateRoom);
-app.post('/api/debate-rooms/:id/force-close', roomController.forceCloseDebateRoom);
+
 
 app.use((err, req, res, next) => {
     res.status(500).json({ message: 'Server error' });

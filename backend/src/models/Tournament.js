@@ -2,7 +2,7 @@ const mongoose = require('mongoose');
 const TournamentSchema = new mongoose.Schema({
     tournament_id: { type: String, unique: true, required: true },
     name: { type: String, required: true },
-    type: { type: String, enum: ['gd', 'debate'], required: true },
+    type: { type: String, enum: ['gd'], required: true },
     host_id: { type: String, required: true },
     host_name: { type: String },
     organizer: { type: String },

@@ -160,7 +160,6 @@ export default function TournamentHub() {
   const typeLabels = {
     gd: 'Group Discussion',
     extempore: 'Extempore',
-    debate: 'Debate'
   };
 
   return (
