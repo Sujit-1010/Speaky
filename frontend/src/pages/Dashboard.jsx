@@ -4,7 +4,7 @@ import { api } from '@/api/apiClient';
 import { Link } from 'react-router-dom';
 import { createPageUrl } from '../utils';
 import { motion } from 'framer-motion';
-import { Sparkles, TrendingUp, Award, Users, MessageSquare, Mic, Swords, Bot } from 'lucide-react';
+import { Sparkles, TrendingUp, Award, Users, MessageSquare, Mic, Bot } from 'lucide-react';
 import TopNav from '../components/navigation/TopNav';
 
 export default function Dashboard() {
@@ -300,7 +300,6 @@ export default function Dashboard() {
                   gd: { icon: MessageSquare, color: 'from-cyan-400 to-blue-500', label: 'Group Discussion' },
                   gd_room: { icon: Users, color: 'from-cyan-400 to-blue-500', label: 'GD Room' },
                   extempore: { icon: Mic, color: 'from-purple-400 to-pink-500', label: 'Extempore' },
-                  debate: { icon: Swords, color: 'from-red-400 to-orange-500', label: 'Debate' },
                   interview: { icon: Bot, color: 'from-green-400 to-teal-500', label: 'AI Interview' }
                 };
                 const config = typeConfig[session.type] || typeConfig.gd;

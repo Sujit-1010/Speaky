@@ -9,12 +9,9 @@ export default function AppFooter() {
   const p = (location.pathname || '').toLowerCase();
   const shouldHide = (
     p === '/createroom' ||
-    p === '/createdebateroom' ||
     p === '/createtournament' ||
     p === '/lobby' ||
     p.startsWith('/lobby/') ||
-    p === '/debatelobby' ||
-    p === '/debateroom' ||
     p === '/gdprepare' ||
     p === '/gdroom' ||
     p === '/aiinterviewroom' ||

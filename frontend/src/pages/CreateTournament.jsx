@@ -1,4 +1,4 @@
-﻿import { api } from '@/api/apiClient';
+import { api } from '@/api/apiClient';
 import { motion } from 'framer-motion';
 import { ArrowLeft, Building2, Calendar as CalendarIcon, Clock, Globe, Lock, Trophy, Upload, Users, X, Info } from 'lucide-react';
 import { useEffect, useState } from 'react';
@@ -152,7 +152,6 @@ export default function CreateTournament() {
   const typeLabels = {
     gd: 'Group Discussion',
     extempore: 'Extempore',
-    debate: 'Debate'
   };
 
   // Helper to show selected date as dd-mm-yyyy
