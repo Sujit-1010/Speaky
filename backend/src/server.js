@@ -15,7 +15,7 @@ const { refreshTopics } = require('./services/topicGenerator.service');
 const User = require('./models/User');
 const UserProfile = require('./models/UserProfile');
 const FriendRequest = require('./models/FriendRequest');
-const Notification = require('./models/Notification');
+
 const Tournament = require('./models/Tournament');
 const TournamentRegistration = require('./models/TournamentRegistration');
 const TournamentAccessToken = require('./models/TournamentAccessToken');
@@ -41,8 +41,8 @@ const extemporeAnalysisRoutes = require('./routes/extemporeAnalysis.routes');
 const tournamentPanelRoutes = require('./routes/tournamentPanel.routes');
 const tournamentController = require('./controllers/tournament.controller');
 const roomController = require('./controllers/room.controller');
+const friendController = require('./controllers/friend.controller');
 const auth = require('./middleware/auth');
-const { sendPushToUser } = require('./utils/pushNotifications');
 
 const app = express();
 
@@ -145,37 +145,7 @@ app.use('/api/ai-interview-sessions', createCrudRouter(AIInterviewSession));
 app.use('/api/interview-analysis', auth, aiRateLimit, interviewAnalysisRoutes);
 app.use('/api/extempore-analysis', auth, aiRateLimit, extemporeAnalysisRoutes);
 
-app.post('/api/friend-requests/:id/accept', async (req, res) => {
-    const fr = await FriendRequest.findById(req.params.id);
-    if (!fr) return res.status(404).json({ message: 'Not found' });
-    fr.status = 'accepted';
-    await fr.save();
-    const me = await UserProfile.findOne({ user_id: fr.to_user_id });
-    const other = await UserProfile.findOne({ user_id: fr.from_user_id });
-    if (me) {
-        me.friends = Array.from(new Set([...(me.friends || []), fr.from_user_id]));
-        await me.save();
-    }
-    if (other) {
-        other.friends = Array.from(new Set([...(other.friends || []), fr.to_user_id]));
-        await other.save();
-    }
-    const notifDoc = await Notification.create({ user_id: fr.from_user_id, type: 'friend_request', title: 'Friend Request Accepted', message: 'Your request was accepted', from_user_id: fr.to_user_id, is_read: false });
-    try {
-        const io = req.app.get('io');
-        const plain = notifDoc?.toObject ? notifDoc.toObject() : notifDoc;
-        const payload = { ...plain, id: (plain?._id || plain?.id || '').toString(), created_date: plain?.createdAt || plain?.created_date || plain?.created_at };
-        if (io && payload.user_id) io.to(`user:${payload.user_id}`).emit('notification_created', { notification: payload });
-    } catch { }
-    try {
-        await sendPushToUser(fr.from_user_id, {
-            title: 'Friend Request Accepted',
-            body: 'Your request was accepted',
-            data: { type: 'friend_request', from_user_id: fr.to_user_id }
-        });
-    } catch { }
-    res.json({ success: true });
-});
+app.post('/api/friend-requests/:id/accept', friendController.acceptFriendRequest);
 
 app.post('/api/gd-rooms/:id/join', auth, async (req, res) => {
     const { user_name } = req.body || {};
