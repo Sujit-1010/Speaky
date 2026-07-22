@@ -8,4 +8,5 @@ const NotificationSchema = new mongoose.Schema({
     room_id: { type: String },
     is_read: { type: Boolean, default: false }
 }, { timestamps: true });
+NotificationSchema.index({ user_id: 1 });
 module.exports = mongoose.model('Notification', NotificationSchema);

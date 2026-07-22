@@ -12,5 +12,6 @@ const TournamentRegistrationSchema = new mongoose.Schema({
     accepted_rules: { type: Boolean, default: false },
     accepted_at: { type: Date }
 }, { timestamps: true });
+TournamentRegistrationSchema.index({ tournament_id: 1, user_id: 1 });
 module.exports = mongoose.model('TournamentRegistration', TournamentRegistrationSchema);
      

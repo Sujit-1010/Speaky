@@ -24,5 +24,7 @@ const schema = new mongoose.Schema({
   },
   transcript: String
 }, { timestamps: true })
+schema.index({ sessionId: 1 });
+schema.index({ userId: 1 });
 
 module.exports = mongoose.model('AIInterviewAnalysis', schema)

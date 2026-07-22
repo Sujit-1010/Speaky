@@ -6,4 +6,6 @@ const FriendRequestSchema = new mongoose.Schema({
     message: { type: String },
     status: { type: String, enum: ['pending', 'accepted', 'rejected'], default: 'pending' }
 }, { timestamps: true });
+FriendRequestSchema.index({ to_user_id: 1, status: 1 });
+FriendRequestSchema.index({ from_user_id: 1 });
 module.exports = mongoose.model('FriendRequest', FriendRequestSchema);
