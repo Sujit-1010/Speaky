@@ -297,11 +297,6 @@ const integrations = {
       // Fallback
       return { content: `LLM is not connected. Stub for prompt: ${String(prompt || '').slice(0, 80)}...` };
     },
-    async SendEmail(_payload) { return { success: true }; },
-    async SendSMS(_payload) { return { success: true }; },
-    async UploadFile(_payload) { return { success: true }; },
-    async GenerateImage(_payload) { return { success: true }; },
-    async ExtractDataFromUploadedFile(_payload) { return { success: true }; },
   }
 };
 

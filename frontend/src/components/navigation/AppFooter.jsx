@@ -14,7 +14,6 @@ export default function AppFooter() {
     p.startsWith('/lobby/') ||
     p === '/gdprepare' ||
     p === '/gdroom' ||
-    p === '/aiinterviewroom' ||
     p === '/humaninterviewroom'
   );
 

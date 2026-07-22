@@ -2,7 +2,6 @@ import About from './pages/About';
 import AIInterviewAI from './pages/AIInterviewAI';
 import AIInterviewAnalysis from './pages/AIInterviewAnalysis';
 import AIInterviewHub from './pages/AIInterviewHub';
-import AIInterviewRoom from './pages/AIInterviewRoom';
 import BrowseRooms from './pages/BrowseRooms';
 import Call from './pages/Call';
 
@@ -65,7 +64,6 @@ export const PAGES = {
 
     "TournamentLobby": TournamentLobby,
     "AIInterviewHub": AIInterviewHub,
-    "AIInterviewRoom": AIInterviewRoom,
     "About": About,
     "AIInterviewAI": AIInterviewAI,
     "AIInterviewAnalysis": AIInterviewAnalysis,

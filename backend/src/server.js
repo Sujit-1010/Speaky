@@ -4,11 +4,9 @@ const helmet = require('helmet');
 const morgan = require('morgan');
 const cookieParser = require('cookie-parser');
 const rateLimit = require('express-rate-limit');
-const crypto = require('crypto');
 const config = require('./config');
 const connectDB = require('./db');
 const createCrudRouter = require('./routes/crud');
-const { sendTournamentRegistrationEmail, sendJudgeInviteEmail, sendTimeSlotEmail } = require('./utils/mailer');
 const cron = require('node-cron');
 const { refreshTopics } = require('./services/topicGenerator.service');
 
@@ -28,7 +26,6 @@ const ExtemporeTopic = require('./models/ExtemporeTopic');
 const ExtemporeMessage = require('./models/ExtemporeMessage');
 const SoloPracticeSession = require('./models/SoloPracticeSession');
 const AIInterviewSession = require('./models/AIInterviewSession');
-const AIInterviewAnalysis = require('./models/AIInterviewAnalysis');
 
 const authRoutes = require('./routes/auth');
 const tokenRoutes = require('./routes/token');

@@ -4,7 +4,7 @@ const fs = require('fs');
 const { transcribeAudio } = require('../services/assemblyai.service');
 const { analyzeWithGroq } = require('../services/groq.service');
 const { calculateMetrics, calculateScores, generateStrengthsAndImprovements, calculateParticipationScoreFromPercent, calculateOverallScore } = require('../services/scoring.service');
-const { uploadAudio: uploadAudioToCloudinary } = require('../services/cloudinary.service');
+const { uploadAudio: uploadAudioToCloudinary, deleteAudio } = require('../services/cloudinary.service');
 
 async function recalculateParticipationForSession({ sessionId, io }) {
     try {
@@ -62,6 +62,14 @@ async function runAnalysisPipeline({ analysisId, sessionId, audioUrl, topic, dur
                 textLength: transcriptData?.text?.length,
                 duration: transcriptData?.audio_duration
             })
+
+            // Transcription succeeded — delete the Cloudinary audio file.
+            // This is a cleanup step only; any failure is logged and swallowed so the
+            // analysis pipeline is never blocked or interrupted by a Cloudinary hiccup.
+            const cloudinaryPublicId = `speakup/recordings/${sessionId}_${userId}`;
+            deleteAudio(cloudinaryPublicId).catch((err) => {
+                console.error('[Cloudinary cleanup] Failed to delete audio after transcription:', cloudinaryPublicId, err?.message);
+            });
         } catch (e) {
             console.error('=== AssemblyAI FAILED ===', {
                 message: e.message,
@@ -132,18 +140,18 @@ async function runAnalysisPipeline({ analysisId, sessionId, audioUrl, topic, dur
         const transcript = transcriptData?.text || '';
         const metrics = calculateMetrics(transcriptData, duration);
 
-        let gemini;
-        let geminiUsed = true;
+        let groqResult;
+        let groqUsed = true;
         try {
-            gemini = await analyzeWithGroq(transcript, topic);
+            groqResult = await analyzeWithGroq(transcript, topic);
         } catch {
-            geminiUsed = false;
+            groqUsed = false;
             
             const wordCount = transcriptData?.text?.split(' ')?.length || 0;
             const fallbackKnowledge = wordCount < 10 ? 15 : 50;
             const fallbackGrammar = wordCount < 10 ? 15 : 50;
 
-            gemini = {
+            groqResult = {
                 knowledgeScore: fallbackKnowledge,
                 grammarScore: fallbackGrammar,
                 grammarErrors: [],
@@ -163,15 +171,15 @@ async function runAnalysisPipeline({ analysisId, sessionId, audioUrl, topic, dur
             };
         }
 
-        const scores = calculateScores(metrics, gemini);
+        const scores = calculateScores(metrics, groqResult);
         const ruleFeedback = generateStrengthsAndImprovements(scores, metrics);
 
         const feedback = {
-            strengths: Array.isArray(gemini?.strengths) ? gemini.strengths : (ruleFeedback.strengths || []),
-            improvements: Array.isArray(gemini?.improvements) ? gemini.improvements : (ruleFeedback.improvements || []),
-            tips: Array.isArray(gemini?.tips) ? gemini.tips : [],
-            grammarErrors: Array.isArray(gemini?.grammarErrors) ? gemini.grammarErrors : [],
-            grammarCorrections: Array.isArray(gemini?.grammarCorrections) ? gemini.grammarCorrections : [],
+            strengths: Array.isArray(groqResult?.strengths) ? groqResult.strengths : (ruleFeedback.strengths || []),
+            improvements: Array.isArray(groqResult?.improvements) ? groqResult.improvements : (ruleFeedback.improvements || []),
+            tips: Array.isArray(groqResult?.tips) ? groqResult.tips : [],
+            grammarErrors: Array.isArray(groqResult?.grammarErrors) ? groqResult.grammarErrors : [],
+            grammarCorrections: Array.isArray(groqResult?.grammarCorrections) ? groqResult.grammarCorrections : [],
         };
 
         await Analysis.updateOne(
@@ -182,7 +190,7 @@ async function runAnalysisPipeline({ analysisId, sessionId, audioUrl, topic, dur
                     duration: metrics.duration || duration || null,
                     transcript,
                     audioUrl,
-                    geminiUsed,
+                    geminiUsed: groqUsed,  // DB field name kept as-is; renaming would break existing documents
                     metrics: {
                         speakingTime: metrics.speakingTime,
                         totalWords: metrics.totalWords,

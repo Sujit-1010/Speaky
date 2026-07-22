@@ -2,6 +2,16 @@ const FILLER_WORDS = [
     'um', 'uh', 'like', 'you know', 'basically', 'actually', 'so', 'hmm'
 ];
 
+// Score weights used in calculateOverallScore and calculateScores.
+// Defined once here so changes are made in a single place.
+const SCORE_WEIGHTS = {
+    participation: 0.25,
+    communication: 0.25,
+    knowledge:     0.25,
+    grammar:       0.15,
+    teamwork:      0.10,
+};
+
 function clamp(n, min, max) {
     const x = Number(n);
     if (!Number.isFinite(x)) return min;
@@ -110,11 +120,11 @@ function calculateOverallScore(scores) {
     const teamwork = clamp(s.teamwork, 0, 100);
 
     return Math.round(
-        (participation * 0.25) +
-        (communication * 0.25) +
-        (knowledge * 0.25) +
-        (grammar * 0.15) +
-        (teamwork * 0.10)
+        (participation * SCORE_WEIGHTS.participation) +
+        (communication * SCORE_WEIGHTS.communication) +
+        (knowledge     * SCORE_WEIGHTS.knowledge) +
+        (grammar       * SCORE_WEIGHTS.grammar) +
+        (teamwork      * SCORE_WEIGHTS.teamwork)
     );
 }
 
@@ -151,11 +161,11 @@ function calculateScores(metrics, gemini) {
     const grammar = clamp(gemini?.grammarScore, 0, 100);
 
     const overall = Math.round(
-        (participation * 0.25) +
-        (communication * 0.25) +
-        (knowledge * 0.25) +
-        (grammar * 0.15) +
-        (teamwork * 0.10)
+        (participation * SCORE_WEIGHTS.participation) +
+        (communication * SCORE_WEIGHTS.communication) +
+        (knowledge     * SCORE_WEIGHTS.knowledge) +
+        (grammar       * SCORE_WEIGHTS.grammar) +
+        (teamwork      * SCORE_WEIGHTS.teamwork)
     );
 
     return {
