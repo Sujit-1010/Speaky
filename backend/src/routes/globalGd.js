@@ -135,7 +135,7 @@ router.post('/join', async (req, res) => {
         try {
           // SUCCESS: We own these 3 users exclusively. Safe to create room.
           const matchedUserIds = candidates.map((u) => u.userId);
-          const topic = getRandomTopic();
+          const topic = await getRandomTopic();
 
           const participantsDocs = candidates.map((u) => ({
             user_id: u.userId,

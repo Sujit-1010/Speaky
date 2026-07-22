@@ -211,17 +211,10 @@ app.use((err, req, res, next) => {
 
 const http = require('http');
 const { Server } = require('socket.io');
+const { buildRedisAdapter } = require('./redisAdapter');
 
 const start = async () => {
     await connectDB(config.mongoUri);
-
-    // Initial fetch of topics
-    refreshTopics();
-
-    // Schedule to fetch topics every 12 hours
-    cron.schedule('0 */12 * * *', () => {
-        refreshTopics();
-    });
 
     const server = http.createServer(app);
     const io = new Server(server, {
@@ -230,6 +223,20 @@ const start = async () => {
             methods: ["GET", "POST"],
             credentials: true
         }
+    });
+
+    // Attach Redis adapter for cross-instance Socket.io event sync.
+    // Must complete before refreshTopics() so the distributed lock can use
+    // the shared Redis client (getRedisClient()) on boot.
+    const redisAdapter = await buildRedisAdapter();
+    if (redisAdapter) io.adapter(redisAdapter);
+
+    // Initial fetch of topics (runs through the distributed lock, same as cron)
+    refreshTopics();
+
+    // Schedule to fetch topics every 12 hours
+    cron.schedule('0 */12 * * *', () => {
+        refreshTopics();
     });
 
     io.on('connection', (socket) => {
