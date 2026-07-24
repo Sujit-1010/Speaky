@@ -60,29 +60,15 @@ export default function BrowseRooms() {
     
     setJoining(room.id);
     try {
-      // Check if already a participant
-      const isAlreadyParticipant = room.participants?.some(
-        p => p.user_id === user.email || p.user_id === user.id
-      );
-
-      if (!isAlreadyParticipant) {
-        const updatedParticipants = [...(room.participants || []), {
-          user_id: user.email,
-          name: user.full_name,
-          joined_at: new Date().toISOString()
-        }];
-
-        await api.entities.GDRoom.update(room.id, {
-          participants: updatedParticipants
-        });
-      }
-
+      // Use dedicated participant endpoint — server validates capacity and status.
+      await api.gdParticipant.join(room.id, { user_name: user.full_name });
       navigate(createPageUrl(`Lobby?roomId=${room.id}`));
     } catch (error) {
       console.error('Error joining room:', error);
       setJoining(null);
     }
   };
+
 
   return (
     <div className="min-h-screen pb-20">

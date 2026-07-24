@@ -419,6 +419,61 @@ const extemporeAnalysis = {
   },
 };
 
-api = { ...api, tournaments, rooms, interviewAnalysis, extemporeAnalysis };
+// Dedicated friend-request action endpoints.
+// accept() routes through the server-side handler that updates both friends
+// lists, creates the notification, and fires socket/push — all in one call.
+const friendRequests = {
+  async accept(id) {
+    if (!id) throw new Error('Missing friend request id');
+    return post(`/api/friend-requests/${id}/accept`, {});
+  },
+  async reject(id) {
+    if (!id) throw new Error('Missing friend request id');
+    return post(`/api/friend-requests/${id}/reject`, {});
+  },
+};
+
+// Dedicated chat-message action endpoints.
+const chatMessages = {
+  async markRead(id) {
+    if (!id) throw new Error('Missing message id');
+    return request('PATCH', `/api/chat-messages/${id}/read`, {});
+  },
+  async deleteMessage(id) {
+    if (!id) throw new Error('Missing message id');
+    return del(`/api/chat-messages/${id}/party-delete`);
+  },
+};
+
+// Participant self-join/leave for GD rooms (non-host paths).
+// Kept separate from rooms.gd.join which is the original host-join path
+// now replaced by the dedicated participant route.
+const gdParticipant = {
+  async join(roomId, args) {
+    const a = args || {};
+    return post(`/api/gd-rooms/${roomId}/participant`, { user_name: a.user_name });
+  },
+  async leave(roomId) {
+    return del(`/api/gd-rooms/${roomId}/participant`);
+  },
+};
+
+// AIInterview participant join (non-host path).
+const aiInterviewParticipant = {
+  async join(roomId, args) {
+    const a = args || {};
+    return post(`/api/ai-interviews/${roomId}/join`, { user_name: a.user_name });
+  },
+};
+
+// Tournament registration host-update route.
+const tournamentRegistrations = {
+  async hostUpdate(tournamentId, regId, patch) {
+    if (!tournamentId || !regId) throw new Error('Missing ids');
+    return request('PATCH', `/api/tournaments/${tournamentId}/registrations/${regId}`, patch);
+  },
+};
+
+api = { ...api, tournaments, rooms, interviewAnalysis, extemporeAnalysis, friendRequests, chatMessages, gdParticipant, aiInterviewParticipant, tournamentRegistrations };
 export { api };
 

@@ -71,7 +71,7 @@ export default function Chat() {
         if (newMessage.from_user_id === friendKey) {
           const idToMark = incomingId;
           if (!idToMark || String(idToMark).startsWith('local:')) return;
-          api.entities.ChatMessage.update(idToMark, { is_read: true })
+          api.chatMessages.markRead(idToMark)
             .then(() => {
               try { socket.emit('message_read', { message_id: idToMark, from_user_id: friendKey, to_user_id: user.email }); } catch {}
             })
@@ -135,7 +135,7 @@ export default function Chat() {
       const unreadMessages = conversation.filter(m => m.to_user_id === currentUser.email && !m.is_read);
       for (const msg of unreadMessages) {
         try {
-          await api.entities.ChatMessage.update(msg.id, { is_read: true });
+          await api.chatMessages.markRead(msg.id);
           try { socket?.emit('message_read', { message_id: msg.id, from_user_id: peerId, to_user_id: currentUser.email }); } catch {}
         } catch {}
       }
@@ -223,7 +223,7 @@ export default function Chat() {
     if (String(id).startsWith('local:')) return;
     setDeleting(prev => ({ ...prev, [id]: true }));
     try {
-      await api.entities.ChatMessage.delete(id);
+      await api.chatMessages.deleteMessage(id);
       setMessages(prev => prev.filter(m => m.id !== id));
     } finally {
       setDeleting(prev => ({ ...prev, [id]: false }));
@@ -237,10 +237,11 @@ export default function Chat() {
       (m.from_user_id === friendKey && m.to_user_id === user.email)
     ).map(m => m.id);
     try {
-      await Promise.all(ids.map(id => api.entities.ChatMessage.delete(id)));
+      await Promise.all(ids.map(id => api.chatMessages.deleteMessage(id)));
       setMessages([]);
     } catch {}
   };
+
 
   if (loading) {
     return (

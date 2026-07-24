@@ -21,6 +21,12 @@ async function acceptFriendRequest(req, res) {
         const fr = await FriendRequest.findById(req.params.id);
         if (!fr) return res.status(404).json({ message: 'Not found' });
 
+        // Ownership check: only the intended recipient may accept their own request.
+        // to_user_id is stored as the user's email, which matches req.user.email from the JWT.
+        if (String(fr.to_user_id) !== String(req.user.email)) {
+            return res.status(403).json({ message: 'Forbidden' });
+        }
+
         fr.status = 'accepted';
         await fr.save();
 
@@ -73,6 +79,31 @@ async function acceptFriendRequest(req, res) {
     }
 }
 
+// ---------------------------------------------------------------------------
+// POST /api/friend-requests/:id/reject
+//
+// Only the intended recipient may reject a request.
+// Sets status → 'rejected'. No cross-profile or notification side-effects.
+// ---------------------------------------------------------------------------
+async function rejectFriendRequest(req, res) {
+    try {
+        const fr = await FriendRequest.findById(req.params.id);
+        if (!fr) return res.status(404).json({ message: 'Not found' });
+
+        if (String(fr.to_user_id) !== String(req.user.email)) {
+            return res.status(403).json({ message: 'Forbidden' });
+        }
+
+        fr.status = 'rejected';
+        await fr.save();
+        res.json({ success: true });
+    } catch (e) {
+        console.error('rejectFriendRequest error', e);
+        res.status(500).json({ message: 'Server error' });
+    }
+}
+
 module.exports = {
     acceptFriendRequest,
+    rejectFriendRequest,
 };

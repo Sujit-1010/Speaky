@@ -139,41 +139,14 @@ export default function Profile() {
   };
 
   const acceptInvite = async (request) => {
-    // mirror TopNav accept logic
-    await api.entities.FriendRequest.update(request.id, { status: 'accepted' });
-    // ensure both profiles updated
-    let myProfiles = await api.entities.UserProfile.filter({ user_id: user.email });
-    if (myProfiles.length === 0) {
-      myProfiles = await api.entities.UserProfile.filter({ user_id: user.id });
-    }
-    let theirProfiles = await api.entities.UserProfile.filter({ user_id: request.from_user_id });
-    if (theirProfiles.length === 0) {
-      const created = await api.entities.UserProfile.create({ user_id: request.from_user_id, xp_points: 0, level: 1, friends: [] });
-      theirProfiles = [created];
-    }
-    if (myProfiles.length === 0) {
-      const createdMine = await api.entities.UserProfile.create({ user_id: user.email, xp_points: 0, level: 1, friends: [] });
-      myProfiles = [createdMine];
-    }
-    const myFriends = Array.from(new Set([...(myProfiles[0].friends || []), request.from_user_id]));
-    await api.entities.UserProfile.update(myProfiles[0].id, { friends: myFriends });
-    const theirFriends = Array.from(new Set([...(theirProfiles[0].friends || []), user.email]));
-    await api.entities.UserProfile.update(theirProfiles[0].id, { friends: theirFriends });
-    await api.entities.Notification.create({
-      user_id: request.from_user_id,
-      type: 'friend_request',
-      title: 'Friend Request Accepted',
-      message: `${user.full_name} accepted your friend request`,
-      from_user_id: user.email,
-      is_read: false
-    });
-    // refresh
+    // Single server-side call handles status, both friends lists, notification, socket, and push.
+    await api.friendRequests.accept(request.id);
     setIncomingRequests(incomingRequests.filter(r => r.id !== request.id));
     setProfile({ ...profile, friends: Array.from(new Set([...(profile.friends || []), request.from_user_id])) });
   };
 
   const declineInvite = async (request) => {
-    await api.entities.FriendRequest.update(request.id, { status: 'rejected' });
+    await api.friendRequests.reject(request.id);
     setIncomingRequests(incomingRequests.filter(r => r.id !== request.id));
   };
 
@@ -181,6 +154,7 @@ export default function Profile() {
     try { await api.entities.FriendRequest.delete(request.id); } catch {}
     setSentRequests(sentRequests.filter(r => r.id !== request.id));
   };
+
 
   return (
     <div className="min-h-screen pb-20">

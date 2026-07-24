@@ -85,15 +85,16 @@ export default function Organiser() {
     setGroupEdits((m) => ({ ...m, [id]: value }));
   };
 
+
   const saveGroup = async (reg) => {
     const raw = groupEdits[reg.id];
     const val = raw === '' || raw === undefined || raw === null ? null : Number(raw);
-    await api.entities.TournamentRegistration.update(reg.id, { group_number: val });
+    await api.tournamentRegistrations.hostUpdate(tournamentId, reg.id, { group_number: val });
     load();
   };
 
   const clearGroup = async (reg) => {
-    await api.entities.TournamentRegistration.update(reg.id, { group_number: null });
+    await api.tournamentRegistrations.hostUpdate(tournamentId, reg.id, { group_number: null });
     setGroupEdits((m) => ({ ...m, [reg.id]: '' }));
     load();
   };
@@ -106,10 +107,11 @@ export default function Organiser() {
     let g = 0;
     for (let i = 0; i < shuffled.length; i++) {
       if (i % groupSize === 0) g++;
-      await api.entities.TournamentRegistration.update(shuffled[i].id, { group_number: g });
+      await api.tournamentRegistrations.hostUpdate(tournamentId, shuffled[i].id, { group_number: g });
     }
     load();
   };
+
 
   const createLobbies = async () => {
     if (!tournament) return;

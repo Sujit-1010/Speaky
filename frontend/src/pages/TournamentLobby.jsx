@@ -123,27 +123,8 @@ export default function TournamentLobby() {
     if (!user || !myRoomId || isReady || readyLoading) return;
     setReadyLoading(true);
     try {
-      const [room] = await api.entities.GDRoom.filter({ id: myRoomId });
-      if (!room) return;
-
-      const email = user.email || user.id;
-      const participants = Array.isArray(room.participants) ? [...room.participants] : [];
-      const idx = participants.findIndex(
-        p => p && (p.user_id === email || p.user_id === user.id)
-      );
-      const now = new Date().toISOString();
-
-      if (idx >= 0) {
-        participants[idx] = { ...participants[idx], joined_at: now };
-      } else {
-        participants.push({
-          user_id: email,
-          name: user.full_name || email,
-          joined_at: now,
-        });
-      }
-
-      await api.entities.GDRoom.update(room.id, { participants });
+      // Dedicated participant endpoint handles joined_at and is idempotent.
+      await api.gdParticipant.join(myRoomId, { user_name: user.full_name || user.email });
       setIsReady(true);
     } catch (error) {
       console.error('Error marking tournament ready:', error);
@@ -151,6 +132,7 @@ export default function TournamentLobby() {
       setReadyLoading(false);
     }
   };
+
 
   const shuffleAndFormGroups = async () => {
     if (!isHost) return;
@@ -163,7 +145,8 @@ export default function TournamentLobby() {
     
     for (let i = 0; i < shuffled.length; i++) {
       if (i % groupSize === 0) groupNumber++;
-      await api.entities.TournamentRegistration.update(shuffled[i].id, {
+      // Host updating another participant's group_number — must use host-only route.
+      await api.tournamentRegistrations.hostUpdate(tournamentId, shuffled[i].id, {
         group_number: groupNumber
       });
 
@@ -172,6 +155,7 @@ export default function TournamentLobby() {
     setGroupsFormed(true);
     loadData();
   };
+
 
   const startTournament = async () => {
     if (!isHost || !groupsFormed) return;

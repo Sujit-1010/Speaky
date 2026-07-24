@@ -39,6 +39,7 @@ const tournamentPanelRoutes = require('./routes/tournamentPanel.routes');
 const tournamentController = require('./controllers/tournament.controller');
 const roomController = require('./controllers/room.controller');
 const friendController = require('./controllers/friend.controller');
+const chatController = require('./controllers/chat.controller');
 const auth = require('./middleware/auth');
 
 const app = express();
@@ -119,30 +120,41 @@ app.use('/api/auth', authRoutes);
 app.use('/api/global-gd', globalGdRoutes);
 app.use('/api/analysis', auth, aiRateLimit, analysisRoutes);
 
-app.use('/api/users', createCrudRouter(User));
-app.use('/api/user-profiles', createCrudRouter(UserProfile));
-app.use('/api/friend-requests', createCrudRouter(FriendRequest));
+// 'email' is the owner-identity field on User documents.
+// Frontend only uses User.list() — no PATCH/DELETE — but the ownership
+// guard is cheap and prevents any future cross-user edits.
+app.use('/api/users', createCrudRouter(User, 'email'));
+app.use('/api/user-profiles', createCrudRouter(UserProfile, 'user_id'));
+app.use('/api/friend-requests', createCrudRouter(FriendRequest, 'from_user_id'));
 app.use('/api/notifications', notificationsRoutes);
 // Panel-data route MUST be mounted before the generic CRUD router for /api/tournaments
 // so that /api/tournaments/:id/panel-data is matched here before /:id swallows it.
 app.use('/api/tournaments', tournamentPanelRoutes);
-app.use('/api/tournaments', createCrudRouter(Tournament));
-app.use('/api/tournament-registrations', createCrudRouter(TournamentRegistration));
-app.use('/api/gd-rooms', createCrudRouter(GDRoom));
-app.use('/api/gd-sessions', createCrudRouter(GDSession));
-app.use('/api/extempore-sessions', createCrudRouter(ExtemporeSession));
-app.use('/api/ai-interviews', createCrudRouter(AIInterview));
-app.use('/api/chat-messages', createCrudRouter(ChatMessage));
-app.use('/api/extempore-topics', createCrudRouter(ExtemporeTopic));
-app.use('/api/extempore-messages', createCrudRouter(ExtemporeMessage));
-app.use('/api/solo-practice-sessions', createCrudRouter(SoloPracticeSession));
+app.use('/api/tournaments', createCrudRouter(Tournament, 'host_id'));
+app.use('/api/tournament-registrations', createCrudRouter(TournamentRegistration, 'user_id'));
+app.use('/api/gd-rooms', createCrudRouter(GDRoom, 'host_id'));
+app.use('/api/gd-sessions', createCrudRouter(GDSession, 'user_id'));
+app.use('/api/extempore-sessions', createCrudRouter(ExtemporeSession, 'user_id'));
+app.use('/api/ai-interviews', createCrudRouter(AIInterview, 'host_id'));
+// ChatMessage dedicated write endpoints — mounted before the CRUD router.
+// markRead: recipient only. deleteMessage: either party (sender or recipient).
+app.patch('/api/chat-messages/:id/read', auth, chatController.markRead);
+app.delete('/api/chat-messages/:id/party-delete', auth, chatController.deleteMessage);
+// Generic CRUD for ChatMessage: GET (list/filter) + POST (send, forces from_user_id).
+// PATCH /:id and DELETE /:id on the generic router are blocked — all writes use the
+// dedicated endpoints above which enforce caller identity.
+app.use('/api/chat-messages', createCrudRouter(ChatMessage, 'from_user_id', { readOnly: false }));
+app.use('/api/extempore-topics', createCrudRouter(ExtemporeTopic));     // No owner field — admin-curated content
+app.use('/api/extempore-messages', createCrudRouter(ExtemporeMessage, 'user_id'));
+app.use('/api/solo-practice-sessions', createCrudRouter(SoloPracticeSession, 'user_id'));
 app.use('/api/zego', tokenRoutes);
 app.use('/api/push', pushRoutes);
-app.use('/api/ai-interview-sessions', createCrudRouter(AIInterviewSession));
+app.use('/api/ai-interview-sessions', createCrudRouter(AIInterviewSession, 'user_id'));
 app.use('/api/interview-analysis', auth, aiRateLimit, interviewAnalysisRoutes);
 app.use('/api/extempore-analysis', auth, aiRateLimit, extemporeAnalysisRoutes);
 
-app.post('/api/friend-requests/:id/accept', friendController.acceptFriendRequest);
+app.post('/api/friend-requests/:id/accept', auth, friendController.acceptFriendRequest);
+app.post('/api/friend-requests/:id/reject', auth, friendController.rejectFriendRequest);
 
 app.post('/api/gd-rooms/:id/join', auth, async (req, res) => {
     const { user_name } = req.body || {};
@@ -172,6 +184,8 @@ app.post('/api/gd-rooms/:id/join', auth, async (req, res) => {
 
 app.post('/api/tournaments/:id/register', tournamentController.registerForTournament);
 
+// Host-only: update any participant's registration (group_number, status, etc.)
+app.patch('/api/tournaments/:id/registrations/:regId', auth, tournamentController.patchRegistration);
 
 app.post('/api/tournaments/:id/start', tournamentController.startTournament);
 
@@ -193,6 +207,13 @@ app.post('/api/tournaments/:id/invite-judge', tournamentController.inviteJudge);
 
 // Send custom time slot emails
 app.post('/api/tournaments/:id/send-time-slot', tournamentController.sendTimeSlot);
+
+// Participant self-join/leave (not host-only; user adds/removes themselves)
+app.post('/api/gd-rooms/:id/participant', auth, roomController.joinGDRoomAsParticipant);
+app.delete('/api/gd-rooms/:id/participant', auth, roomController.leaveGDRoomAsParticipant);
+
+// AI Interview non-host participant join
+app.post('/api/ai-interviews/:id/join', auth, roomController.joinAIInterview);
 
 // Lobby controls for GD rooms
 app.post('/api/gd-rooms/:id/start', roomController.startGDRoom);

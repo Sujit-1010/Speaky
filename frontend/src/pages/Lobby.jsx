@@ -139,8 +139,8 @@ export default function Lobby() {
           await api.entities.GDRoom.update(room.id, { status: 'completed', participants: [] });
         }
       } else {
-        const updatedParticipants = (room.participants || []).filter(p => p.user_id !== user.email && p.user_id !== user.id);
-        await api.entities.GDRoom.update(room.id, { participants: updatedParticipants });
+        // Non-host: self-removal only — use dedicated endpoint so we don't need CRUD write access.
+        await api.gdParticipant.leave(room.id);
       }
     } finally {
       navigate(createPageUrl('GDArena'));

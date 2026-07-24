@@ -96,20 +96,8 @@ export default function AIInterviewHub() {
       }
 
       const room = rooms[0];
-      
-      // Add user to participants
-      const isAlreadyParticipant = room.participants?.some(p => p.user_id === user.email);
-      if (!isAlreadyParticipant) {
-        const updatedParticipants = [...(room.participants || []), {
-          user_id: user.email,
-          name: user.full_name,
-          joined_at: new Date().toISOString()
-        }];
-
-        await api.entities.AIInterview.update(room.id, {
-          participants: updatedParticipants
-        });
-      }
+      // Use dedicated join endpoint — server validates status and handles idempotency.
+      await api.aiInterviewParticipant.join(room.id, { user_name: user.full_name });
 
       navigate(createPageUrl(`HumanInterviewRoom?roomId=${room.id}`));
     } catch (error) {
@@ -118,6 +106,7 @@ export default function AIInterviewHub() {
       setLoading(false);
     }
   };
+
 
   const interviewTypes = [
     { id: 'hr', label: 'HR Interview', icon: Heart, color: 'from-pink-400 to-red-500' },

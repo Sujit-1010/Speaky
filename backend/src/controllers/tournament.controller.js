@@ -342,6 +342,32 @@ async function sendTimeSlot(req, res) {
     }
 }
 
+// ---------------------------------------------------------------------------
+// PATCH /api/tournaments/:id/registrations/:regId
+//
+// Host-only: verifies the caller is the tournament host before patching
+// any field on a participant's registration (group_number, status, etc.).
+// ---------------------------------------------------------------------------
+async function patchRegistration(req, res) {
+    try {
+        const tournament = await Tournament.findById(req.params.id);
+        if (!tournament) return res.status(404).json({ message: 'Tournament not found' });
+        if (!req.user || String(tournament.host_id) !== String(req.user.email)) {
+            return res.status(403).json({ message: 'Forbidden — host only' });
+        }
+        const reg = await TournamentRegistration.findById(req.params.regId);
+        if (!reg) return res.status(404).json({ message: 'Registration not found' });
+        const patch = req.body || {};
+        Object.assign(reg, patch);
+        await reg.save();
+        const plain = reg.toObject ? reg.toObject() : reg;
+        res.json({ ...plain, id: reg._id.toString() });
+    } catch (e) {
+        console.error('patchRegistration error', e);
+        res.status(500).json({ message: 'Server error' });
+    }
+}
+
 module.exports = {
     // Route handlers
     registerForTournament,
@@ -353,6 +379,7 @@ module.exports = {
     validateOrganiserSession,
     inviteJudge,
     sendTimeSlot,
+    patchRegistration,
     // Shared helpers — used by room.controller.js for access-token validation
     getAccessTokenFromReq,
     validateAccessTokenForTournament,

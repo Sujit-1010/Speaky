@@ -217,48 +217,20 @@ export default function TopNav({ activePage = 'Dashboard', user = null }) {
   };
 
   const acceptFriendRequest = async (request) => {
-    // Update request status
-    await api.entities.FriendRequest.update(request.id, { status: 'accepted' });
-
-    // Add to both users' friends lists
-    let myProfiles = await api.entities.UserProfile.filter({ user_id: currentUser.email });
-    if (myProfiles.length === 0) {
-      myProfiles = await api.entities.UserProfile.filter({ user_id: currentUser.id });
-    }
-    let theirProfiles = await api.entities.UserProfile.filter({ user_id: request.from_user_id });
-    if (theirProfiles.length === 0) {
-      // create their profile if missing
-      const created = await api.entities.UserProfile.create({ user_id: request.from_user_id, xp_points: 0, level: 1, friends: [] });
-      theirProfiles = [created];
-    }
-    if (myProfiles.length === 0) {
-      const createdMine = await api.entities.UserProfile.create({ user_id: currentUser.email, xp_points: 0, level: 1, friends: [] });
-      myProfiles = [createdMine];
-    }
-
-    const myFriends = Array.from(new Set([...(myProfiles[0].friends || []), request.from_user_id]));
-    await api.entities.UserProfile.update(myProfiles[0].id, { friends: myFriends });
-
-    const theirFriends = Array.from(new Set([...(theirProfiles[0].friends || []), currentUser.email]));
-    await api.entities.UserProfile.update(theirProfiles[0].id, { friends: theirFriends });
-
-    // Send notification to the requester
-    await api.entities.Notification.create({
-      user_id: request.from_user_id,
-      type: 'friend_request',
-      title: 'Friend Request Accepted',
-      message: `${currentUser.full_name} accepted your friend request`,
-      from_user_id: currentUser.email,
-      is_read: false
-    });
-
+    // Route through the server-side accept handler which atomically:
+    //   1. Updates FriendRequest status → 'accepted'
+    //   2. Adds each user to the other's friends list
+    //   3. Creates a Notification for the sender
+    //   4. Emits socket event + fires push to the sender
+    await api.friendRequests.accept(request.id);
     setFriendRequests((prev) => (prev || []).filter((r) => r.id !== request.id));
   };
 
   const rejectFriendRequest = async (request) => {
-    await api.entities.FriendRequest.update(request.id, { status: 'rejected' });
+    await api.friendRequests.reject(request.id);
     setFriendRequests((prev) => (prev || []).filter((r) => r.id !== request.id));
   };
+
 
   const openChat = (friendId) => {
     navigate(createPageUrl('Chat', { friendId }));
@@ -485,11 +457,8 @@ export default function TopNav({ activePage = 'Dashboard', user = null }) {
                                               const rooms = await api.entities.GDRoom.filter({ id: notif.room_id });
                                               if (rooms.length === 0) return;
                                               const room = rooms[0];
-                                              const isAlready = (room.participants || []).some(p => p.user_id === me.email || p.user_id === me.id);
-                                              if (!isAlready) {
-                                                const updated = { participants: [ ...(room.participants || []), { user_id: me.email, name: me.full_name, joined_at: new Date().toISOString() } ] };
-                                                await api.entities.GDRoom.update(room.id, updated);
-                                              }
+                                              // Dedicated endpoint handles capacity check and joined_at atomically.
+                                              await api.gdParticipant.join(room.id, { user_name: me.full_name });
                                               const allInvites = await api.entities.Notification.filter({ user_id: me.email, type: 'room_invite', room_id: room.id });
                                               await Promise.all((allInvites || []).map(n => api.entities.Notification.delete(n.id)));
                                               removeNotificationsLocal((n) => n.type === 'room_invite' && (n.room_id === room.id || n.room_id === notif.room_id));

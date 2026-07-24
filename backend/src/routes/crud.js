@@ -20,7 +20,7 @@ function crudError(res, req, e) {
     res.status(500).json({ message: msg });
 }
 
-function createCrudRouter(Model) {
+function createCrudRouter(Model, ownerField, { readOnly = false } = {}) {
     const router = express.Router();
 
     router.get('/', auth, async (req, res) => {
@@ -44,17 +44,30 @@ function createCrudRouter(Model) {
         }
     });
 
-    router.post('/', async (req, res) => {
+    router.post('/', auth, async (req, res) => {
+        if (readOnly) return res.status(405).json({ message: 'Method not allowed — use dedicated endpoint' });
         try {
-            const created = await Model.create(req.body || {});
+            const body = { ...(req.body || {}) };
+            // Force-set the owner field to the authenticated user so clients
+            // cannot claim ownership of a record on behalf of another user.
+            if (ownerField) body[ownerField] = req.user.email;
+            const created = await Model.create(body);
             res.status(201).json(toPlain(created));
         } catch (e) {
             crudError(res, req, e);
         }
     });
 
-    router.patch('/:id', async (req, res) => {
+    router.patch('/:id', auth, async (req, res) => {
+        if (readOnly) return res.status(405).json({ message: 'Method not allowed — use dedicated endpoint' });
         try {
+            if (ownerField) {
+                const doc = await Model.findById(req.params.id);
+                if (!doc) return res.status(404).json({ message: 'Not found' });
+                if (String(doc[ownerField]) !== String(req.user.email)) {
+                    return res.status(403).json({ message: 'Forbidden' });
+                }
+            }
             const updated = await Model.findByIdAndUpdate(req.params.id, req.body || {}, { new: true });
             if (!updated) return res.status(404).json({ message: 'Not found' });
             res.json(toPlain(updated));
@@ -63,8 +76,16 @@ function createCrudRouter(Model) {
         }
     });
 
-    router.delete('/:id', async (req, res) => {
+    router.delete('/:id', auth, async (req, res) => {
+        if (readOnly) return res.status(405).json({ message: 'Method not allowed — use dedicated endpoint' });
         try {
+            if (ownerField) {
+                const doc = await Model.findById(req.params.id);
+                if (!doc) return res.status(404).json({ message: 'Not found' });
+                if (String(doc[ownerField]) !== String(req.user.email)) {
+                    return res.status(403).json({ message: 'Forbidden' });
+                }
+            }
             const deleted = await Model.findByIdAndDelete(req.params.id);
             if (!deleted) return res.status(404).json({ message: 'Not found' });
             res.json({ success: true });
@@ -78,3 +99,4 @@ function createCrudRouter(Model) {
 
 module.exports = createCrudRouter;
 module.exports.toPlain = toPlain;
+
