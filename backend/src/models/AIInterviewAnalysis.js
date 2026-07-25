@@ -26,5 +26,9 @@ const schema = new mongoose.Schema({
 }, { timestamps: true })
 schema.index({ sessionId: 1 });
 schema.index({ userId: 1 });
+// Compound unique index: ensures at most one analysis record per (sessionId, userId).
+// This makes the findOneAndUpdate upsert in the controller safe under concurrent
+// double-submits — MongoDB rejects any second insert that would violate uniqueness.
+schema.index({ sessionId: 1, userId: 1 }, { unique: true });
 
 module.exports = mongoose.model('AIInterviewAnalysis', schema)

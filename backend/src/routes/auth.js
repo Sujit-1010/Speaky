@@ -46,10 +46,10 @@ router.post('/login', async (req, res) => {
         if (!user) return res.status(401).json({ message: 'Invalid credentials' });
         const ok = await bcrypt.compare(password, user.passwordHash);
         if (!ok) return res.status(401).json({ message: 'Invalid credentials' });
-        
+
         const streakResult = await updateStreak(user.email);
-        const profile = await UserProfile.findOne({ user_id: user.email });
-        
+        const profile = streakResult.profile;
+
         const token = signToken(user);
         res.cookie('token', token, cookieOpts);
         res.json({ token, user: { id: user._id.toString(), email: user.email, full_name: user.full_name, avatar: user.avatar, xp_points: user.xp_points, level: profile?.level || 1, xp: profile?.xp || 0, totalXP: profile?.totalXP || 0, streak: streakResult.streak ?? profile?.streak ?? 0, longestStreak: profile?.longestStreak || 0, lastActiveDate: profile?.lastActiveDate || null, streakChanged: streakResult.changed || false, streakIncreased: streakResult.increased || false, streakReset: streakResult.reset || false, previousStreak: streakResult.previousStreak ?? 0, isFirstLogin: streakResult.isFirstLogin || false, streakData: streakResult } });
@@ -82,10 +82,10 @@ router.post('/firebase', async (req, res) => {
                 user = await User.findById(user._id);
             }
         }
-        
+
         const streakResult = await updateStreak(user.email);
-        const profile = await UserProfile.findOne({ user_id: user.email });
-        
+        const profile = streakResult.profile;
+
         const token = signToken(user);
         res.cookie('token', token, cookieOpts);
         res.json({ token, user: { id: user._id.toString(), email: user.email, full_name: user.full_name, avatar: user.avatar, xp_points: user.xp_points, level: profile?.level || 1, xp: profile?.xp || 0, totalXP: profile?.totalXP || 0, streak: streakResult.streak ?? profile?.streak ?? 0, longestStreak: profile?.longestStreak || 0, lastActiveDate: profile?.lastActiveDate || null, streakChanged: streakResult.changed || false, streakIncreased: streakResult.increased || false, streakReset: streakResult.reset || false, previousStreak: streakResult.previousStreak ?? 0, isFirstLogin: streakResult.isFirstLogin || false, streakData: streakResult } });
@@ -104,23 +104,20 @@ router.post('/logout', auth, async (req, res) => {
 router.get('/me', auth, async (req, res) => {
     const user = await User.findById(req.user.id);
     if (!user) return res.status(404).json({ message: 'Not found' });
-    
-    const streakResult = await updateStreak(user.email);
-    const profile = await UserProfile.findOne({ user_id: user.email });
-    
-    console.log('Auth me response:', {
-      xp: profile?.xp,
-      totalXP: profile?.totalXP,
-      level: profile?.level,
-      streakResult
-    });
 
-    res.json({ 
-        id: user._id.toString(), 
-        email: user.email, 
-        full_name: user.full_name, 
-        avatar: user.avatar, 
-        xp_points: user.xp_points, 
+    // updateStreak returns the profile in all code paths (changed or not),
+    // eliminating the redundant second UserProfile.findOne that was here before.
+    // Query count: User.findById (1) + UserProfile.findOne inside streak (2)
+    // + UserProfile.findOneAndUpdate only on the first call of a new day (3, conditional).
+    const streakResult = await updateStreak(user.email);
+    const profile = streakResult.profile;
+
+    res.json({
+        id: user._id.toString(),
+        email: user.email,
+        full_name: user.full_name,
+        avatar: user.avatar,
+        xp_points: user.xp_points,
         level: profile?.level || 1,
         xp: profile?.xp || 0,
         totalXP: profile?.totalXP || 0,

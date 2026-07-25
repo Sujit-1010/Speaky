@@ -3,7 +3,7 @@ const UserProfile = require('../models/UserProfile');
 const updateStreak = async (userId) => {
   try {
     const profile = await UserProfile.findOne({ user_id: userId });
-    if (!profile) return { streak: 0, changed: false };
+    if (!profile) return { streak: 0, changed: false, profile: null };
 
     const now = new Date();
     const todayStr = now.toISOString().split('T')[0]; // Format: "2026-03-23"
@@ -13,11 +13,13 @@ const updateStreak = async (userId) => {
       ? new Date(lastActive).toISOString().split('T')[0]
       : null;
 
-    // Already logged in today - no change
+    // Already logged in today — return immediately with the profile we already have.
+    // No write needed, and the caller can use this profile directly.
     if (lastActiveStr === todayStr) {
       return {
         streak: profile.streak || 0,
-        changed: false
+        changed: false,
+        profile,
       };
     }
 
@@ -42,13 +44,15 @@ const updateStreak = async (userId) => {
 
     const longestStreak = Math.max(newStreak, profile.longestStreak || 0);
 
-    await UserProfile.findOneAndUpdate(
+    // Use {new: true} so the returned updatedProfile reflects the committed state.
+    const updatedProfile = await UserProfile.findOneAndUpdate(
       { user_id: userId },
       {
         streak: newStreak,
         lastActiveDate: now,
         longestStreak
-      }
+      },
+      { new: true }
     );
 
     console.log('Streak updated:', {
@@ -65,11 +69,12 @@ const updateStreak = async (userId) => {
       changed,
       increased: newStreak > (profile.streak || 0),
       reset: newStreak === 1 && (profile.streak || 0) > 1,
-      isFirstLogin: !lastActiveStr
+      isFirstLogin: !lastActiveStr,
+      profile: updatedProfile,
     };
   } catch (err) {
     console.error('Streak update error:', err);
-    return { streak: 0, changed: false };
+    return { streak: 0, changed: false, profile: null };
   }
 };
 

@@ -11,20 +11,37 @@ async function startInterviewAnalysis(req, res) {
       duration, selectedTopics, resumeText
     } = req.body
 
+    // Guard: sessionId is required for the upsert deduplication key.
+    // Without it, all sessionId-less requests would collide into a single document.
+    if (!sessionId || !userId) {
+      return res.status(400).json({ message: 'sessionId and userId are required' })
+    }
+
     console.log('=== Interview analysis started ===', {
       userId, interviewType, role,
       messageCount: messages?.length
     })
 
-    const analysis = await AIInterviewAnalysis.create({
-      sessionId,
-      userId,
-      interviewType,
-      company,
-      role,
-      duration,
-      status: 'processing'
-    })
+    // findOneAndUpdate with upsert: true prevents duplicate documents on double-submit.
+    // If a record for this (sessionId, userId) already exists, it is reset to 'processing'
+    // and the same _id is returned — runInterviewPipeline then overwrites it in-place.
+    // The compound unique index on { sessionId, userId } makes concurrent upserts safe:
+    // MongoDB guarantees only one document is created even under simultaneous requests.
+    const analysis = await AIInterviewAnalysis.findOneAndUpdate(
+      { sessionId: String(sessionId), userId: String(userId) },
+      {
+        $set: {
+          sessionId: String(sessionId),
+          userId: String(userId),
+          interviewType,
+          company,
+          role,
+          duration,
+          status: 'processing',
+        }
+      },
+      { upsert: true, new: true }
+    )
 
     res.status(201).json({
       analysisId: analysis._id,
