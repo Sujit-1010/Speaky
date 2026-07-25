@@ -30,5 +30,9 @@ const ExtemporeSessionSchema = new mongoose.Schema({
     ai_feedback:   { type: String, default: '' },
     grammar_errors: { type: Array, default: [] },
 }, { timestamps: true });
+// user_id is the primary filter for session history listing.
+ExtemporeSessionSchema.index({ user_id: 1 });
+// Compound covers history queries that also filter by status (e.g. completed only).
+ExtemporeSessionSchema.index({ user_id: 1, status: 1 });
 module.exports = mongoose.model('ExtemporeSession', ExtemporeSessionSchema);
 

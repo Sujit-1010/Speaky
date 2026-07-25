@@ -22,4 +22,9 @@ const GDRoomSchema = new mongoose.Schema({
     locked: { type: Boolean, default: false },
     scheduled_time: { type: Date }
 }, { timestamps: true });
+// Compound index for the globalGd.js findRoomByUser query: mode + status are
+// always filtered together. participants.user_id covers the $elemMatch lookup.
+GDRoomSchema.index({ mode: 1, status: 1 });
+GDRoomSchema.index({ 'participants.user_id': 1 });
+GDRoomSchema.index({ status: 1 });
 module.exports = mongoose.model('GDRoom', GDRoomSchema);

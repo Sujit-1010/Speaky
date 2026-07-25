@@ -38,8 +38,13 @@ function getRedisClient() {
 
 async function buildRedisAdapter() {
     const url = process.env.REDIS_URL;
+    const isProd = process.env.NODE_ENV === 'production';
 
     if (!url) {
+        if (isProd) {
+            console.error('[Redis] FATAL: REDIS_URL is required in production for multi-instance real-time sync — refusing to start without it.');
+            process.exit(1);
+        }
         console.warn('[Redis] REDIS_URL not set — Socket.io will run in single-instance mode (no cross-instance event sync).');
         return null;
     }
@@ -69,6 +74,11 @@ async function buildRedisAdapter() {
 
         return createAdapter(_pubClient, _subClient);
     } catch (err) {
+        if (isProd) {
+            console.error('[Redis] FATAL: Redis connection failed in production — refusing to start. Fix REDIS_URL or Redis availability before deploying.');
+            console.error('[Redis] Cause:', err.message);
+            process.exit(1);
+        }
         console.error('[Redis] Connection failed — Socket.io will run in single-instance mode (no cross-instance event sync).');
         console.error('[Redis] Cause:', err.message);
         // Ensure singletons are null so getRedisClient() returns null on failure.

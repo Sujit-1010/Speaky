@@ -41,6 +41,12 @@ const roomController = require('./controllers/room.controller');
 const friendController = require('./controllers/friend.controller');
 const chatController = require('./controllers/chat.controller');
 const auth = require('./middleware/auth');
+const { RedisStore } = require('rate-limit-redis');
+// getRedisClient must be imported here (before makeLazyRedisStore is defined)
+// so it is in scope when express-rate-limit calls store.init() during rateLimit()
+// construction below. buildRedisAdapter is also imported here for convenience
+// (it is also referenced in the start() function further down).
+const { buildRedisAdapter, getRedisClient } = require('./redisAdapter');
 
 const app = express();
 
@@ -84,9 +90,71 @@ app.use(cors(corsOptions));
 app.use(express.json({ limit: '1mb' }));
 app.use(cookieParser());
 app.use(morgan('dev'));
+// ---------------------------------------------------------------------------
+// makeLazyRedisStore(prefix) — returns an express-rate-limit compatible store
+// that defers Redis client lookup until the first actual request.
+//
+// Why lazy? The rate limiters (rateLimit({...})) are defined at module parse
+// time, BEFORE start() connects Redis. By the time any HTTP request arrives,
+// buildRedisAdapter() has completed and getRedisClient() returns a live client.
+//
+// Fallback: if Redis is still null at request time (dev without Redis), the
+// proxy silently passes through — express-rate-limit then uses its default
+// in-memory counting. In production this never happens (hard startup fail).
+// ---------------------------------------------------------------------------
+function makeLazyRedisStore(prefix) {
+    let _store = null;
+    let _initialized = false;
+
+    function getStore() {
+        if (!_initialized) {
+            const client = getRedisClient();
+            if (client) {
+                _store = new RedisStore({
+                    sendCommand: (...args) => client.sendCommand(args),
+                    prefix: `rl:${prefix}:`,
+                });
+            }
+            _initialized = true;
+        }
+        return _store;
+    }
+
+    // express-rate-limit calls init() once when the middleware is first used.
+    return {
+        init(options) {
+            // Attempt to build the real store if Redis is already up.
+            // Re-init happens automatically on first request if not yet ready.
+            const s = getStore();
+            if (s && s.init) s.init(options);
+            this._rlOptions = options;
+        },
+        async increment(key) {
+            const s = getStore();
+            if (!s) return { totalHits: 1, resetTime: new Date(Date.now() + (this._rlOptions?.windowMs || 60000)) };
+            if (s._rlOptions === undefined && this._rlOptions && s.init) s.init(this._rlOptions);
+            return s.increment(key);
+        },
+        async decrement(key) {
+            const s = getStore();
+            if (s) return s.decrement(key);
+        },
+        async resetKey(key) {
+            const s = getStore();
+            if (s) return s.resetKey(key);
+        },
+        async get(key) {
+            const s = getStore();
+            if (!s) return undefined;
+            return s.get(key);
+        },
+    };
+}
+
 app.use(rateLimit({
     windowMs: 60 * 1000,
     max: 300,
+    store: makeLazyRedisStore('global'),
     skip: (req) => {
         try {
             const url = String(req.originalUrl || req.url || '');
@@ -104,6 +172,7 @@ app.use(rateLimit({
 const aiRateLimit = rateLimit({
     windowMs: 15 * 60 * 1000,
     max: 10,
+    store: makeLazyRedisStore('ai'),
     keyGenerator: (req) => {
         // req.user is set by auth middleware which runs before this limiter.
         // Fall back to IP only if user is somehow absent (should not happen).
@@ -229,7 +298,7 @@ app.use((err, req, res, next) => {
 
 const http = require('http');
 const { Server } = require('socket.io');
-const { buildRedisAdapter } = require('./redisAdapter');
+
 
 const start = async () => {
     await connectDB(config.mongoUri);
