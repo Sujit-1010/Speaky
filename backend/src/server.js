@@ -293,8 +293,11 @@ app.post('/api/gd-rooms/:id/force-close', roomController.forceCloseGDRoom);
 
 
 app.use((err, req, res, next) => {
-    res.status(500).json({ message: 'Server error' });
+    console.error(`[GlobalErrorHandler] ${req.method} ${req.originalUrl} —`, err);
+    const msg = (process.env.NODE_ENV !== 'production' && err?.message) ? err.message : 'Server error';
+    res.status(err?.status || 500).json({ message: msg });
 });
+
 
 const http = require('http');
 const { Server } = require('socket.io');

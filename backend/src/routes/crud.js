@@ -99,4 +99,5 @@ function createCrudRouter(Model, ownerField, { readOnly = false } = {}) {
 
 module.exports = createCrudRouter;
 module.exports.toPlain = toPlain;
+module.exports.crudError = crudError;
 

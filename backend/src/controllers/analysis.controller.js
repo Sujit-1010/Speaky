@@ -226,7 +226,7 @@ async function runAnalysisPipeline({ analysisId, sessionId, audioUrl, topic, dur
         } catch { }
     } catch (error) {
         console.error('Pipeline failed:', error);
-        const msg = (config.nodeEnv !== 'production' && error?.message) ? error.message : (error?.code === 'missing_assemblyai_key' || error?.code === 'missing_gemini_key' ? 'Analysis unavailable. Please contact administrator.' : 'Analysis failed');
+        const msg = (config.nodeEnv !== 'production' && error?.message) ? error.message : (error?.code === 'missing_assemblyai_key' || error?.code === 'missing_groq_key' ? 'Analysis unavailable. Please contact administrator.' : 'Analysis failed');
         try {
             await Analysis.updateOne({ _id: analysisId }, { $set: { status: 'failed', errorReason: msg } });
         } catch { }
@@ -317,18 +317,11 @@ async function getAnalysisHistory(req, res) {
 async function startAnalysis(req, res) {
     try {
         const { sessionId, userId, audioUrl, topic, duration, participantCount } = req.body || {};
-        console.log('Received audioUrl:', audioUrl);
         if (!sessionId || !userId || !audioUrl || typeof audioUrl !== 'string' || !/^https?:\/\//i.test(audioUrl.trim())) {
             return res.status(400).json({
                 message: 'Invalid audio file. Please try again.'
             });
         }
-
-        console.log('=== startAnalysis env check ===')
-        console.log('ASSEMBLYAI_KEY exists:', !!(process.env.ASSEMBLYAI_KEY))
-        console.log('ASSEMBLYAI_KEY length:', process.env.ASSEMBLYAI_KEY?.trim().length)
-        console.log('GROQ_API_KEY exists:', !!(process.env.GROQ_API_KEY))
-        console.log('GROQ_API_KEY length:', process.env.GROQ_API_KEY?.trim().length)
 
         const hasAssemblyKey = (process.env.ASSEMBLYAI_KEY || '').trim().length > 0;
         const hasGroqKey = (process.env.GROQ_API_KEY || '').trim().length > 0;

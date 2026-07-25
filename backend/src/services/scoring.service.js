@@ -88,19 +88,6 @@ function calculateMetrics(transcriptData, sessionDurationSeconds) {
     };
 }
 
-function calculateParticipationScore(speakingTime, totalSessionDuration) {
-    const total = Number(totalSessionDuration) || 0;
-    const spk = Number(speakingTime) || 0;
-    const p = total > 0 ? (spk / total) * 100 : 0;
-
-    if (p >= 15 && p <= 35) return 90;
-    if (p >= 10 && p < 15) return 70;
-    if (p > 35 && p <= 50) return 70;
-    if (p < 10) return 50;
-    if (p > 50) return 40;
-    return 50;
-}
-
 function calculateParticipationScoreFromPercent(participationPercent) {
     const p = Number(participationPercent) || 0;
     if (p >= 15 && p <= 35) return 90;
@@ -109,6 +96,16 @@ function calculateParticipationScoreFromPercent(participationPercent) {
     if (p < 10) return 50;
     if (p > 50) return 40;
     return 50;
+}
+
+// Thin wrapper used internally by calculateScores — computes the participation
+// percentage from raw times and delegates to calculateParticipationScoreFromPercent
+// so the scoring table exists in exactly one place.
+function calculateParticipationScore(speakingTime, totalSessionDuration) {
+    const total = Number(totalSessionDuration) || 0;
+    const spk = Number(speakingTime) || 0;
+    const percent = total > 0 ? (spk / total) * 100 : 0;
+    return calculateParticipationScoreFromPercent(percent);
 }
 
 function calculateOverallScore(scores) {
@@ -152,13 +149,13 @@ function calculateTeamworkScore(turnCount) {
     return 35;
 }
 
-function calculateScores(metrics, gemini) {
+function calculateScores(metrics, groqResult) {
     const participation = calculateParticipationScore(metrics.speakingTime, metrics.duration);
     const communication = calculateCommunicationScore(metrics.fillerRatio, metrics.wpm);
     const teamwork = calculateTeamworkScore(metrics.turnCount);
 
-    const knowledge = clamp(gemini?.knowledgeScore, 0, 100);
-    const grammar = clamp(gemini?.grammarScore, 0, 100);
+    const knowledge = clamp(groqResult?.knowledgeScore, 0, 100);
+    const grammar = clamp(groqResult?.grammarScore, 0, 100);
 
     const overall = Math.round(
         (participation * SCORE_WEIGHTS.participation) +

@@ -1,7 +1,6 @@
 const express = require('express');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
-const cookieParser = require('cookie-parser');
 const User = require('../models/User');
 const UserProfile = require('../models/UserProfile');
 const config = require('../config');
@@ -10,8 +9,6 @@ const firebaseAdmin = require('../utils/firebaseAdmin');
 const { updateStreak } = require('../controllers/streak.controller');
 
 const router = express.Router();
-
-router.use(cookieParser());
 
 const signToken = (user) => jwt.sign({ id: user._id.toString(), email: user.email }, config.jwtSecret, { expiresIn: '7d' });
 // Configure cookie attributes for cross-site usage (Vercel frontend -> Render backend)

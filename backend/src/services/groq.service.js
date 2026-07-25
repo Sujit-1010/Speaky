@@ -2,11 +2,11 @@ const axios = require('axios');
 
 async function analyzeWithGroq(transcript, topic) {
   const key = (process.env.GROQ_API_KEY || '').trim();
-  
-  console.log('=== Groq analyzeWithGemini called ===')
+
+  console.log('=== Groq analyzeWithGroq called ===')
   console.log('=== Groq key exists:', !!key)
-  console.log('=== Transcript:', transcript)
-  
+  console.log('=== Transcript length:', transcript?.length ?? 0)
+
   if (!key) {
     console.warn('=== No Groq key found, using fallback ===')
     return null;

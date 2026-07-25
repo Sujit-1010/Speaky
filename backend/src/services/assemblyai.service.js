@@ -11,8 +11,6 @@ async function sleep(ms) {
 }
 
 async function transcribeAudio(audioUrl) {
-    console.log('=== transcribeAudio called with:', audioUrl)
-    console.log('=== API Key exists:', !!process.env.ASSEMBLYAI_KEY)
     const key = getKey();
     if (!key) {
         const err = new Error('Analysis unavailable. Please contact administrator.');
