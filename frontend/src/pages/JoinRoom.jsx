@@ -80,7 +80,7 @@ export default function JoinRoom() {
         return;
       }
 
-      const joinedRoom = await api.rooms.gd.join(roomId, { user_id: user.email, user_name: user.full_name });
+      const joinedRoom = await api.gdParticipant.join(roomId, { user_name: user.full_name });
       const effectiveRoomId = joinedRoom?.id || joinedRoom?._id || roomId;
 
       if (joinedRoom?.status === 'active') {
@@ -142,7 +142,7 @@ export default function JoinRoom() {
         return;
       }
 
-      const joinedRoom = await api.rooms.gd.join(room.id, { user_id: user.email, user_name: user.full_name });
+      const joinedRoom = await api.gdParticipant.join(room.id, { user_name: user.full_name });
       const effectiveRoomId = joinedRoom?.id || joinedRoom?._id || room.id;
 
       if (joinedRoom?.status === 'active' || room.status === 'active') {

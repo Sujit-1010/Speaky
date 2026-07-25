@@ -51,11 +51,16 @@ function makeRandomToken() {
 
 // ---------------------------------------------------------------------------
 // POST /api/tournaments/:id/register
+// Requires: auth middleware (caller must be logged in)
+// user_id is forced from the JWT — the body value is ignored to prevent spoofing.
 // ---------------------------------------------------------------------------
 async function registerForTournament(req, res) {
     try {
-        const { user_id, user_name, user_email, group_number, accepted_rules } = req.body || {};
-        if (!user_id || !user_email) return res.status(400).json({ message: 'Missing user details' });
+        // C4: Force identity from the verified JWT — never trust req.body.user_id.
+        const user_id = req.user.email;
+        const { user_name, user_email, group_number, accepted_rules } = req.body || {};
+        // Use the caller's email as user_email if not supplied, to keep the field populated.
+        const effective_user_email = (user_email || '').trim() || user_id;
         if (!accepted_rules) return res.status(400).json({ message: 'You must accept the tournament rules to register' });
 
         const tournament = await Tournament.findById(req.params.id);
@@ -97,7 +102,7 @@ async function registerForTournament(req, res) {
             tournament_code: tournament.tournament_id,
             user_id,
             user_name,
-            user_email,
+            user_email: effective_user_email,
             password: normalizedPassword,
             status: 'registered',
             group_number,
@@ -107,13 +112,15 @@ async function registerForTournament(req, res) {
 
         const registrationId = registration._id.toString();
 
-        await sendTournamentRegistrationEmail({
-            to: user_email,
+        // C4: Email is best-effort — a transient SMTP failure must not roll back
+        // the registration that was already committed to the DB.
+        sendTournamentRegistrationEmail({
+            to: effective_user_email,
             userName: user_name || user_id,
             tournament,
             password: normalizedPassword,
             registrationId,
-        });
+        }).catch((e) => console.warn('sendTournamentRegistrationEmail failed (non-fatal):', e?.message || e));
 
         const plain = registration.toObject ? registration.toObject() : registration;
         res.status(201).json({ ...plain, id: registrationId });
@@ -125,11 +132,22 @@ async function registerForTournament(req, res) {
 
 // ---------------------------------------------------------------------------
 // POST /api/tournaments/:id/start
+// Requires: auth middleware on the route in server.js.
+// Authorisation: JWT host OR valid organiser magic-link access token.
 // ---------------------------------------------------------------------------
 async function startTournament(req, res) {
     try {
         const t = await Tournament.findById(req.params.id);
         if (!t) return res.status(404).json({ message: 'Not found' });
+
+        // C2: Verify caller is the authenticated host OR a valid organiser token.
+        const jwtIsHost = req.user && String(req.user.email) === String(t.host_id);
+        const tokenDoc = jwtIsHost ? null : await validateAccessTokenForTournament(getAccessTokenFromReq(req), req.params.id);
+        const tokenIsOrganiser = tokenDoc && tokenDoc.role === 'organiser';
+        if (!jwtIsHost && !tokenIsOrganiser) {
+            return res.status(403).json({ message: 'Forbidden — host or organiser only' });
+        }
+
         t.status = 'active';
         await t.save();
         res.json(t);
@@ -141,11 +159,22 @@ async function startTournament(req, res) {
 
 // ---------------------------------------------------------------------------
 // POST /api/tournaments/:id/restart
+// Requires: auth middleware on the route in server.js.
+// Authorisation: JWT host OR valid organiser magic-link access token.
 // ---------------------------------------------------------------------------
 async function restartTournament(req, res) {
     try {
         const t = await Tournament.findById(req.params.id);
         if (!t) return res.status(404).json({ message: 'Not found' });
+
+        // C2: Verify caller is the authenticated host OR a valid organiser token.
+        const jwtIsHost = req.user && String(req.user.email) === String(t.host_id);
+        const tokenDoc = jwtIsHost ? null : await validateAccessTokenForTournament(getAccessTokenFromReq(req), req.params.id);
+        const tokenIsOrganiser = tokenDoc && tokenDoc.role === 'organiser';
+        if (!jwtIsHost && !tokenIsOrganiser) {
+            return res.status(403).json({ message: 'Forbidden — host or organiser only' });
+        }
+
         // Reset to registering so participants can (re)join and organiser can re-prepare rooms
         t.status = 'registering';
         await t.save();
@@ -158,11 +187,19 @@ async function restartTournament(req, res) {
 
 // ---------------------------------------------------------------------------
 // POST /api/tournament-registrations/:id/join
+// Requires: auth middleware on the route in server.js.
+// Authorisation: only the registered participant may mark themselves as joined.
 // ---------------------------------------------------------------------------
 async function joinTournamentRegistration(req, res) {
     try {
         const reg = await TournamentRegistration.findById(req.params.id);
         if (!reg) return res.status(404).json({ message: 'Not found' });
+
+        // C2: The caller must be the participant who owns this registration.
+        if (String(reg.user_id) !== String(req.user.email)) {
+            return res.status(403).json({ message: 'Forbidden' });
+        }
+
         reg.status = 'joined';
         await reg.save();
         res.json(reg);
@@ -235,17 +272,23 @@ async function validateOrganiserSession(req, res) {
 
 // ---------------------------------------------------------------------------
 // POST /api/tournaments/:id/invite-judge
+// Authorisation: JWT host OR valid organiser access token.
+// The host_email body field is no longer accepted — identity is verified through
+// the JWT or the access token, never through a caller-supplied value.
 // ---------------------------------------------------------------------------
 async function inviteJudge(req, res) {
     try {
         const tournament = await Tournament.findById(req.params.id);
         if (!tournament) return res.status(404).json({ message: 'Tournament not found' });
 
+        // C3: Two legitimate proof-of-identity paths only:
+        //   (a) Valid organiser magic-link token for this tournament.
+        //   (b) Authenticated JWT whose email matches tournament.host_id.
+        // Body-supplied host_email is NOT a proof of identity and is intentionally ignored.
         let allowed = false;
         const tokenDoc = await validateAccessTokenForTournament(getAccessTokenFromReq(req), req.params.id);
         if (tokenDoc && tokenDoc.role === 'organiser') allowed = true;
-        const { host_email } = req.body || {};
-        if (!allowed && host_email && host_email === tournament.host_id) allowed = true;
+        if (!allowed && req.user && String(req.user.email) === String(tournament.host_id)) allowed = true;
         if (!allowed) return res.status(403).json({ message: 'Forbidden' });
 
         const { email, name, expires_in_hours = 72, frontendUrl } = req.body || {};
@@ -285,17 +328,19 @@ async function inviteJudge(req, res) {
 
 // ---------------------------------------------------------------------------
 // POST /api/tournaments/:id/send-time-slot
+// Authorisation: JWT host OR valid organiser access token.
+// Body-supplied host_email is no longer accepted as proof of identity.
 // ---------------------------------------------------------------------------
 async function sendTimeSlot(req, res) {
     try {
         const tournament = await Tournament.findById(req.params.id);
         if (!tournament) return res.status(404).json({ message: 'Tournament not found' });
 
+        // C3: Two legitimate proof-of-identity paths only.
         let allowed = false;
         const tokenDoc = await validateAccessTokenForTournament(getAccessTokenFromReq(req), req.params.id);
         if (tokenDoc && tokenDoc.role === 'organiser') allowed = true;
-        const { host_email } = req.body || {};
-        if (!allowed && host_email && host_email === tournament.host_id) allowed = true;
+        if (!allowed && req.user && String(req.user.email) === String(tournament.host_id)) allowed = true;
         if (!allowed) return res.status(403).json({ message: 'Forbidden' });
 
         const { registration_id, user_email, group_number, room_code, time_slot } = req.body || {};

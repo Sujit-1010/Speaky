@@ -162,7 +162,7 @@ const tournaments = {
     if (!tournamentId) throw new Error('Missing tournamentId');
     const headers = {};
     if (accessToken) headers['x-access-token'] = accessToken;
-    return post(`/api/tournaments/${tournamentId}/invite-judge`, { email, name, host_email, expires_in_hours, frontendUrl }, headers);
+    return post(`/api/tournaments/${tournamentId}/invite-judge`, { email, name, expires_in_hours, frontendUrl }, headers);
   },
   async sendTimeSlot(args) {
     const a = args || {};
@@ -170,7 +170,7 @@ const tournaments = {
     if (!tournamentId) throw new Error('Missing tournamentId');
     const headers = {};
     if (accessToken) headers['x-access-token'] = accessToken;
-    return post(`/api/tournaments/${tournamentId}/send-time-slot`, { registration_id, user_email, group_number, room_code, time_slot, host_email }, headers);
+    return post(`/api/tournaments/${tournamentId}/send-time-slot`, { registration_id, user_email, group_number, room_code, time_slot }, headers);
   },
   async start(args) {
     const a = args || {};
@@ -381,33 +381,29 @@ const interviewAnalysis = {
 };
 const rooms = {
   gd: {
-    async join(id, args) {
-      const a = args || {};
-      return post(`/api/gd-rooms/${id}/join`, { user_id: a.user_id, user_name: a.user_name });
-    },
     async start(id, args) {
       const a = args || {};
       const headers = {};
       if (a.accessToken) headers['x-access-token'] = a.accessToken;
-      return post(`/api/gd-rooms/${id}/start`, { host_email: a.host_email }, headers);
+      return post(`/api/gd-rooms/${id}/start`, {}, headers);
     },
     async stop(id, args) {
       const a = args || {};
       const headers = {};
       if (a.accessToken) headers['x-access-token'] = a.accessToken;
-      return post(`/api/gd-rooms/${id}/stop`, { host_email: a.host_email }, headers);
+      return post(`/api/gd-rooms/${id}/stop`, {}, headers);
     },
     async restart(id, args) {
       const a = args || {};
       const headers = {};
       if (a.accessToken) headers['x-access-token'] = a.accessToken;
-      return post(`/api/gd-rooms/${id}/restart`, { host_email: a.host_email }, headers);
+      return post(`/api/gd-rooms/${id}/restart`, {}, headers);
     },
     async forceClose(id, args) {
       const a = args || {};
       const headers = {};
       if (a.accessToken) headers['x-access-token'] = a.accessToken;
-      return post(`/api/gd-rooms/${id}/force-close`, { host_email: a.host_email }, headers);
+      return post(`/api/gd-rooms/${id}/force-close`, {}, headers);
     },
   },
 };

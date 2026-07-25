@@ -8,16 +8,21 @@ const {
 
 // ---------------------------------------------------------------------------
 // Private helper — checks whether the request comes from a valid organiser
-// magic-link token OR from the tournament's own host (via host_email in body).
+// magic-link token OR from the tournament's authenticated host (via JWT).
 // Used by all GD room lobby-control endpoints.
+//
+// C3 FIX: The old body-supplied host_email check has been removed.
+// Callers proved their identity via JWT and/or a validated access token \u2014
+// never through a value they supply themselves in the request body.
 // ---------------------------------------------------------------------------
 async function hasOrganiserOrHostAccess(req, tournamentId) {
+    // Path 1: Valid organiser magic-link access token for this tournament.
     const tokenDoc = await validateAccessTokenForTournament(getAccessTokenFromReq(req), tournamentId);
     if (tokenDoc && tokenDoc.role === 'organiser') return true;
-    const { host_email } = req.body || {};
-    if (host_email) {
+    // Path 2: Authenticated JWT whose email matches the tournament host_id.
+    if (req.user) {
         const t = await Tournament.findById(tournamentId);
-        if (t && t.host_id === host_email) return true;
+        if (t && String(t.host_id) === String(req.user.email)) return true;
     }
     return false;
 }

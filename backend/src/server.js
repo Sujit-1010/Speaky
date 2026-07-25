@@ -41,6 +41,7 @@ const roomController = require('./controllers/room.controller');
 const friendController = require('./controllers/friend.controller');
 const chatController = require('./controllers/chat.controller');
 const auth = require('./middleware/auth');
+const optionalAuth = require('./middleware/optionalAuth');
 const { RedisStore } = require('rate-limit-redis');
 // getRedisClient must be imported here (before makeLazyRedisStore is defined)
 // so it is in scope when express-rate-limit calls store.init() during rateLimit()
@@ -225,42 +226,19 @@ app.use('/api/extempore-analysis', auth, aiRateLimit, extemporeAnalysisRoutes);
 app.post('/api/friend-requests/:id/accept', auth, friendController.acceptFriendRequest);
 app.post('/api/friend-requests/:id/reject', auth, friendController.rejectFriendRequest);
 
-app.post('/api/gd-rooms/:id/join', auth, async (req, res) => {
-    const { user_name } = req.body || {};
-    const user_id = (req.user && (req.user.email || req.user.id)) ? (req.user.email || req.user.id) : null;
-    if (!user_id) return res.status(401).json({ message: 'Unauthorized' });
-    const room = await GDRoom.findById(req.params.id);
-    if (!room) return res.status(404).json({ message: 'Not found' });
-    if (room.status === 'completed') return res.status(400).json({ message: 'Room has ended' });
-    if (room.locked) return res.status(403).json({ message: 'Room is locked' });
-    const now = new Date();
-    const participants = (room.participants || []);
-    const idx = participants.findIndex(p => p.user_id === user_id);
-    if (idx === -1) {
-        const teamSize = Number(room.team_size || 0) || 4;
-        if (participants.length >= teamSize) {
-            return res.status(409).json({ message: 'Room is full' });
-        }
-        room.participants.push({ user_id, name: user_name, joined_at: now });
-    } else {
-        // Ensure joined_at is set when user re-joins
-        if (!room.participants[idx].joined_at) room.participants[idx].joined_at = now;
-        if (!room.participants[idx].name && user_name) room.participants[idx].name = user_name;
-    }
-    await room.save();
-    res.json(room);
-});
 
-app.post('/api/tournaments/:id/register', tournamentController.registerForTournament);
+app.post('/api/tournaments/:id/register', auth, tournamentController.registerForTournament);
 
 // Host-only: update any participant's registration (group_number, status, etc.)
 app.patch('/api/tournaments/:id/registrations/:regId', auth, tournamentController.patchRegistration);
 
-app.post('/api/tournaments/:id/start', tournamentController.startTournament);
+app.post('/api/tournaments/:id/start', optionalAuth, tournamentController.startTournament);
 
-app.post('/api/tournaments/:id/restart', tournamentController.restartTournament);
+app.post('/api/tournaments/:id/restart', optionalAuth, tournamentController.restartTournament);
 
-app.post('/api/tournament-registrations/:id/join', tournamentController.joinTournamentRegistration);
+
+app.post('/api/tournament-registrations/:id/join', auth, tournamentController.joinTournamentRegistration);
+
 
 // Create an organiser magic link (host-only via auth)
 app.post('/api/tournaments/:id/organiser-link', auth, tournamentController.createOrganiserLink);
@@ -271,11 +249,12 @@ app.get('/api/tournaments/:id/validate-access', tournamentController.validateAcc
 // Validate organiser via authenticated session (host account)
 app.get('/api/tournaments/:id/validate-organiser', auth, tournamentController.validateOrganiserSession);
 
-// Invite a judge (host via host_email or organiser via token)
-app.post('/api/tournaments/:id/invite-judge', tournamentController.inviteJudge);
+// Invite a judge (host via JWT or organiser via magic-link token)
+app.post('/api/tournaments/:id/invite-judge', optionalAuth, tournamentController.inviteJudge);
 
 // Send custom time slot emails
-app.post('/api/tournaments/:id/send-time-slot', tournamentController.sendTimeSlot);
+app.post('/api/tournaments/:id/send-time-slot', optionalAuth, tournamentController.sendTimeSlot);
+
 
 // Participant self-join/leave (not host-only; user adds/removes themselves)
 app.post('/api/gd-rooms/:id/participant', auth, roomController.joinGDRoomAsParticipant);
@@ -285,10 +264,13 @@ app.delete('/api/gd-rooms/:id/participant', auth, roomController.leaveGDRoomAsPa
 app.post('/api/ai-interviews/:id/join', auth, roomController.joinAIInterview);
 
 // Lobby controls for GD rooms
-app.post('/api/gd-rooms/:id/start', roomController.startGDRoom);
-app.post('/api/gd-rooms/:id/stop', roomController.stopGDRoom);
-app.post('/api/gd-rooms/:id/restart', roomController.restartGDRoom);
-app.post('/api/gd-rooms/:id/force-close', roomController.forceCloseGDRoom);
+// optionalAuth: populated req.user when caller is a logged-in host.
+// hasOrganiserOrHostAccess inside each handler then checks JWT host OR access token.
+app.post('/api/gd-rooms/:id/start', optionalAuth, roomController.startGDRoom);
+app.post('/api/gd-rooms/:id/stop', optionalAuth, roomController.stopGDRoom);
+app.post('/api/gd-rooms/:id/restart', optionalAuth, roomController.restartGDRoom);
+app.post('/api/gd-rooms/:id/force-close', optionalAuth, roomController.forceCloseGDRoom);
+
 
 
 

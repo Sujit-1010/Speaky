@@ -174,7 +174,7 @@ export default function Organiser() {
 
     setRoomBusy(prev => ({ ...prev, [room.id]: action }));
     try {
-      await fn(room.id, { accessToken, host_email: tournament?.host_id });
+      await fn(room.id, { accessToken });
     } finally {
       setRoomBusy(prev => ({ ...prev, [room.id]: null }));
       load();
@@ -194,7 +194,6 @@ export default function Organiser() {
         tournamentId,
         email,
         name,
-        host_email: tournament?.host_id,
         frontendUrl,
         accessToken,
       });
@@ -218,7 +217,6 @@ export default function Organiser() {
         group_number: timeGroup ? Number(timeGroup) : undefined,
         room_code: timeCode || undefined,
         time_slot: when,
-        host_email: tournament?.host_id,
         accessToken,
       });
       alert('Time slot email(s) sent successfully.');
@@ -264,7 +262,7 @@ export default function Organiser() {
     const id = pendingStart.roomId;
     setRoomBusy(prev => ({ ...prev, [id]: 'start' }));
     try {
-      await api.rooms.gd.start(id, { accessToken, host_email: tournament?.host_id });
+      await api.rooms.gd.start(id, { accessToken });
     } finally {
       setRoomBusy(prev => ({ ...prev, [id]: null }));
       setPendingStart(null);
