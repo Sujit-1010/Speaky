@@ -27,4 +27,7 @@ const GDRoomSchema = new mongoose.Schema({
 GDRoomSchema.index({ mode: 1, status: 1 });
 GDRoomSchema.index({ 'participants.user_id': 1 });
 GDRoomSchema.index({ status: 1 });
+// tournament_id index: used by Organiser.jsx and room-creation logic to filter
+// rooms belonging to a specific tournament (GDRoom.filter({tournament_id})).
+GDRoomSchema.index({ tournament_id: 1 });
 module.exports = mongoose.model('GDRoom', GDRoomSchema);

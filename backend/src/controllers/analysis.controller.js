@@ -5,6 +5,7 @@ const { transcribeAudio } = require('../services/assemblyai.service');
 const { analyzeWithGroq } = require('../services/groq.service');
 const { calculateMetrics, calculateScores, generateStrengthsAndImprovements, calculateParticipationScoreFromPercent, calculateOverallScore } = require('../services/scoring.service');
 const { uploadAudio: uploadAudioToCloudinary, deleteAudio } = require('../services/cloudinary.service');
+const pipelineLimiter = require('../services/pipelineLimiter.service');
 
 async function recalculateParticipationForSession({ sessionId, io }) {
     try {
@@ -346,12 +347,24 @@ async function startAnalysis(req, res) {
         );
 
         const analysisId = created._id.toString();
+
+        // M5: Enforce concurrency cap before launching the background pipeline.
+        // If we're at the limit, return 503 immediately — the registration is
+        // persisted so the user can retry without losing their place.
+        if (!pipelineLimiter.acquire()) {
+            return res.status(503).json({
+                message: 'Analysis system is busy. Please try again in a moment.',
+                analysisId,
+            });
+        }
+
         res.status(201).json({ success: true, analysisId });
 
         const io = req.app.get('io');
-        setImmediate(() => {
-            runAnalysisPipeline({ analysisId: created._id, sessionId, audioUrl, topic, duration, userId, io }).catch(() => { });
-        });
+        // Slot was acquired above — must be released when the pipeline finishes.
+        runAnalysisPipeline({ analysisId: created._id, sessionId, audioUrl, topic, duration, userId, io })
+            .catch(() => { })
+            .finally(() => pipelineLimiter.release());
     } catch (e) {
         res.status(500).json({ message: 'Server error' });
     }

@@ -7,7 +7,7 @@ const { sendPushToUser } = require('../utils/pushNotifications');
 // POST /api/friend-requests/:id/accept
 //
 // Does all 5 steps atomically in one function:
-//   1. Update FriendRequest status → 'accepted'
+//   1. Update FriendRequest status → 'accepted'  (atomic, idempotent)
 //   2. Add each user to the other's friends list (de-duped)
 //   3. Create a Notification document for the sender
 //   4. Emit 'notification_created' via Socket.io to the sender's user room
@@ -18,17 +18,33 @@ const { sendPushToUser } = require('../utils/pushNotifications');
 // ---------------------------------------------------------------------------
 async function acceptFriendRequest(req, res) {
     try {
-        const fr = await FriendRequest.findById(req.params.id);
-        if (!fr) return res.status(404).json({ message: 'Not found' });
-
-        // Ownership check: only the intended recipient may accept their own request.
-        // to_user_id is stored as the user's email, which matches req.user.email from the JWT.
-        if (String(fr.to_user_id) !== String(req.user.email)) {
-            return res.status(403).json({ message: 'Forbidden' });
+        // M4 FIX: Use findOneAndUpdate with { status: 'pending' } as an extra
+        // filter condition. Only one of two simultaneous accept calls can match
+        // this document while status is still 'pending' — the second call finds
+        // nothing (fr = null) and is rejected before any side-effects occur.
+        const fr = await FriendRequest.findOneAndUpdate(
+            { _id: req.params.id, status: 'pending' },
+            { $set: { status: 'accepted' } },
+            { new: true }
+        );
+        if (!fr) {
+            // Either the request doesn't exist, the caller isn't the recipient,
+            // or it was already accepted/rejected by a concurrent call.
+            const existing = await FriendRequest.findById(req.params.id);
+            if (!existing) return res.status(404).json({ message: 'Not found' });
+            if (String(existing.to_user_id) !== String(req.user.email)) {
+                return res.status(403).json({ message: 'Forbidden' });
+            }
+            // Already processed — treat as success (idempotent).
+            return res.json({ success: true });
         }
 
-        fr.status = 'accepted';
-        await fr.save();
+        // Ownership check on the matched document (it will have to_user_id populated).
+        if (String(fr.to_user_id) !== String(req.user.email)) {
+            // Undo the status change since caller isn't the intended recipient.
+            await FriendRequest.findByIdAndUpdate(fr._id, { $set: { status: 'pending' } });
+            return res.status(403).json({ message: 'Forbidden' });
+        }
 
         const me = await UserProfile.findOne({ user_id: fr.to_user_id });
         const other = await UserProfile.findOne({ user_id: fr.from_user_id });
@@ -78,6 +94,7 @@ async function acceptFriendRequest(req, res) {
         res.status(500).json({ message: 'Server error' });
     }
 }
+
 
 // ---------------------------------------------------------------------------
 // POST /api/friend-requests/:id/reject

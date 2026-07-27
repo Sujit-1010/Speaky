@@ -44,5 +44,8 @@ const AnalysisSchema = new mongoose.Schema({
 });
 
 AnalysisSchema.index({ sessionId: 1, userId: 1 }, { unique: true });
+// Compound index for the getAnalysisHistory query: Analysis.find({userId, status:'completed'})
+// sorted by createdAt. Prefix on userId means single-user lookups also benefit.
+AnalysisSchema.index({ userId: 1, status: 1, createdAt: -1 });
 
 module.exports = mongoose.model('Analysis', AnalysisSchema);

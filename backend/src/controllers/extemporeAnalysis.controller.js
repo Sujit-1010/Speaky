@@ -2,6 +2,7 @@ const ExtemporeSession = require('../models/ExtemporeSession');
 const config = require('../config');
 const { analyzeExtempore } = require('../services/groq.service');
 const { awardXP } = require('../services/xp.service');
+const pipelineLimiter = require('../services/pipelineLimiter.service');
 
 async function startExtemporeAnalysis(req, res) {
   try {
@@ -11,13 +12,20 @@ async function startExtemporeAnalysis(req, res) {
 
     if (!sessionId) return res.status(400).json({ message: 'Missing sessionId' });
 
+    // M5: Enforce concurrency cap before launching the heavy pipeline.
+    if (!pipelineLimiter.acquire()) {
+      return res.status(503).json({ message: 'Analysis system is busy. Please try again in a moment.' });
+    }
+
     // Acknowledge immediately so the frontend can start polling
     res.status(201).json({ sessionId, message: 'Analysis started' });
 
     // Run the heavy pipeline in the background — intentionally not awaited.
     // .catch() ensures rejections are logged instead of silently lost.
+    // .finally() always releases the concurrency slot.
     runExtemporePipeline(sessionId, req.app, userId, transcript, topic, duration)
-      .catch((err) => console.error('[extempore-pipeline] unhandled rejection — sessionId:', sessionId, err));
+      .catch((err) => console.error('[extempore-pipeline] unhandled rejection — sessionId:', sessionId, err))
+      .finally(() => pipelineLimiter.release());
 
   } catch (err) {
     console.error('Start extempore analysis error:', err);

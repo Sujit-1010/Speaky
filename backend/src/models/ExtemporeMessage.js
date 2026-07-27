@@ -6,4 +6,8 @@ const ExtemporeMessageSchema = new mongoose.Schema({
     text: { type: String, default: '' }
 }, { timestamps: true });
 
+// Compound index: messages are always fetched by session_id; user_id as
+// secondary field covers per-user lookups within a session efficiently.
+ExtemporeMessageSchema.index({ session_id: 1, user_id: 1 });
+
 module.exports = mongoose.model('ExtemporeMessage', ExtemporeMessageSchema);

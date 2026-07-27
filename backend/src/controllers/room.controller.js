@@ -182,21 +182,29 @@ async function joinGDRoomAsParticipant(req, res) {
 //
 // Participant self-removal — removes ONLY the authenticated user from
 // the participants array. Cannot remove others.
+//
+// M1 FIX: The old read-modify-write (findById + filter in JS + save) has been
+// replaced with a single atomic findOneAndUpdate using $pull. Two simultaneous
+// leave requests now both land in MongoDB independently — neither can overwrite
+// the other's removal.
 // ---------------------------------------------------------------------------
 async function leaveGDRoomAsParticipant(req, res) {
     try {
         const user_id = req.user.email;
-        const room = await GDRoom.findById(req.params.id);
-        if (!room) return res.status(404).json({ message: 'Not found' });
-
-        room.participants = (room.participants || []).filter(p => p.user_id !== user_id);
-        await room.save();
+        // Atomic: $pull removes the matching subdocument in a single DB operation.
+        // If the room doesn't exist, findOneAndUpdate returns null; we treat that
+        // as a no-op (idempotent leave) and respond 200.
+        await GDRoom.findByIdAndUpdate(
+            req.params.id,
+            { $pull: { participants: { user_id } } }
+        );
         res.json({ success: true });
     } catch (e) {
         console.error('leaveGDRoomAsParticipant error', e);
         res.status(500).json({ message: 'Server error' });
     }
 }
+
 
 // ---------------------------------------------------------------------------
 // POST /api/ai-interviews/:id/join

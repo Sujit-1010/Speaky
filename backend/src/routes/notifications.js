@@ -1,15 +1,31 @@
 const express = require('express');
 const Notification = require('../models/Notification');
 const { sendPushToUser } = require('../utils/pushNotifications');
+const auth = require('../middleware/auth');
 
 const { toPlain, crudError } = require('./crud');
 
 const router = express.Router();
 
-router.get('/', async (req, res) => {
+// ---------------------------------------------------------------------------
+// M6 FIX: All notification routes now require authentication (auth middleware).
+// Ownership is enforced per verb:
+//   GET /       — filter forced to caller's user_id (cannot read others')
+//   GET /:id    — must own the notification
+//   POST /      — user_id is forced from JWT (body value ignored)
+//   PATCH /:id  — must own the notification
+//   DELETE /:id — must own the notification
+// ---------------------------------------------------------------------------
+
+// GET / — list notifications for the authenticated user only.
+// Any user_id value in the query string is ignored; we always force it to
+// the caller's JWT identity so a user can never read another user's notifications.
+router.get('/', auth, async (req, res) => {
     try {
         const filter = { ...req.query };
         Object.keys(filter).forEach((k) => { if (filter[k] === 'true') filter[k] = true; if (filter[k] === 'false') filter[k] = false; });
+        // Ownership: override whatever user_id was in the query string.
+        filter.user_id = req.user.email;
         const items = await Notification.find(filter).sort(req.query.sort || '-createdAt');
         res.json(items.map(toPlain));
     } catch (e) {
@@ -17,19 +33,27 @@ router.get('/', async (req, res) => {
     }
 });
 
-router.get('/:id', async (req, res) => {
+// GET /:id — fetch a single notification; reject if not owned by caller.
+router.get('/:id', auth, async (req, res) => {
     try {
         const item = await Notification.findById(req.params.id);
         if (!item) return res.status(404).json({ message: 'Not found' });
+        if (String(item.user_id) !== String(req.user.email)) {
+            return res.status(403).json({ message: 'Forbidden' });
+        }
         res.json(toPlain(item));
     } catch (e) {
         crudError(res, req, e);
     }
 });
 
-router.post('/', async (req, res) => {
+// POST / — create a notification.
+// user_id is forced from the JWT so callers cannot create notifications for
+// other users by supplying a different user_id in the body.
+router.post('/', auth, async (req, res) => {
     try {
-        const created = await Notification.create(req.body || {});
+        const body = { ...(req.body || {}), user_id: req.user.email };
+        const created = await Notification.create(body);
         const plain = toPlain(created);
 
         // Realtime socket emit (in-app)
@@ -76,20 +100,30 @@ router.post('/', async (req, res) => {
     }
 });
 
-router.patch('/:id', async (req, res) => {
+// PATCH /:id — update (e.g., mark as read); must own the notification.
+router.patch('/:id', auth, async (req, res) => {
     try {
+        const item = await Notification.findById(req.params.id);
+        if (!item) return res.status(404).json({ message: 'Not found' });
+        if (String(item.user_id) !== String(req.user.email)) {
+            return res.status(403).json({ message: 'Forbidden' });
+        }
         const updated = await Notification.findByIdAndUpdate(req.params.id, req.body || {}, { new: true });
-        if (!updated) return res.status(404).json({ message: 'Not found' });
         res.json(toPlain(updated));
     } catch (e) {
         crudError(res, req, e);
     }
 });
 
-router.delete('/:id', async (req, res) => {
+// DELETE /:id — delete; must own the notification.
+router.delete('/:id', auth, async (req, res) => {
     try {
-        const deleted = await Notification.findByIdAndDelete(req.params.id);
-        if (!deleted) return res.status(404).json({ message: 'Not found' });
+        const item = await Notification.findById(req.params.id);
+        if (!item) return res.status(404).json({ message: 'Not found' });
+        if (String(item.user_id) !== String(req.user.email)) {
+            return res.status(403).json({ message: 'Forbidden' });
+        }
+        await Notification.findByIdAndDelete(req.params.id);
         res.json({ success: true });
     } catch (e) {
         crudError(res, req, e);

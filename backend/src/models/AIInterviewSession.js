@@ -13,4 +13,7 @@ const AIInterviewSessionSchema = new mongoose.Schema({
     messages: { type: [MessageSchema], default: [] },
 }, { timestamps: true });
 
+// user_id index: session list is always filtered by user_id.
+AIInterviewSessionSchema.index({ user_id: 1 });
+
 module.exports = mongoose.model('AIInterviewSession', AIInterviewSessionSchema);

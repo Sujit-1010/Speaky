@@ -18,36 +18,52 @@ function calculateLevel(totalXP) {
   return Math.floor(totalXP / 500) + 1;
 }
 
+// ---------------------------------------------------------------------------
+// M3 FIX: Atomic XP award using MongoDB $inc.
+//
+// The previous implementation read the profile, computed new totals in JS,
+// then wrote the absolute new value back — losing one XP award if two events
+// raced. $inc is atomic: two concurrent $inc operations both persist, so no
+// XP is silently dropped.
+//
+// Level derivation requires knowing the new totalXP, so we use { new: true }
+// to get the post-increment document, compute level from it, and only write
+// level back if it has changed. This results in at most two DB round-trips
+// (instead of the previous read + write).
+// ---------------------------------------------------------------------------
 async function awardXP(userId, overallScore) {
   const xpEarned = calculateXP(overallScore);
   if (xpEarned === 0) return { xpEarned: 0 };
 
-  const profile = await UserProfile.findOne({ 
-    user_id: userId 
-  });
-  
-  const currentXP = profile?.xp || 0;
-  const currentTotalXP = profile?.totalXP || 0;
-  
-  const newTotalXP = currentTotalXP + xpEarned;
-  const newLevel = calculateLevel(newTotalXP);
-  const oldLevel = calculateLevel(currentTotalXP);
-  
-  await UserProfile.findOneAndUpdate(
+  // Step 1: Atomically increment both xp and totalXP.
+  const updated = await UserProfile.findOneAndUpdate(
     { user_id: userId },
-    { 
-      xp: currentXP + xpEarned,
-      totalXP: newTotalXP,
-      level: newLevel
-    }
+    { $inc: { xp: xpEarned, totalXP: xpEarned } },
+    { new: true }
   );
 
-  return { 
+  // If no profile exists yet (e.g., profile not created yet), bail out gracefully.
+  if (!updated) return { xpEarned };
+
+  const newTotalXP = updated.totalXP || 0;
+  const oldLevel = updated.level || 1;
+  const newLevel = calculateLevel(newTotalXP);
+
+  // Step 2: Sync level only when it has changed (avoids an extra write on
+  // the common case where no level-up occurred).
+  if (newLevel !== oldLevel) {
+    await UserProfile.findOneAndUpdate(
+      { user_id: userId },
+      { $set: { level: newLevel } }
+    );
+  }
+
+  return {
     xpEarned,
     newTotalXP,
     newLevel,
     leveledUp: newLevel > oldLevel,
-    oldLevel
+    oldLevel,
   };
 }
 

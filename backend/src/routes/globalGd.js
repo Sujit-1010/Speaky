@@ -211,6 +211,15 @@ router.post('/join', async (req, res) => {
 // Check the current matching status for a user.
 // 1) If they are in an active global room, return matched with room details.
 // 2) Otherwise, return waiting with their queue position (if any).
+//
+// M9 FIX: The redundant deleteMany + updateMany cleanup calls that previously
+// ran on every single poll have been removed.
+//   - deleteMany({joinedAt: {$lt: cutoff}}) was redundant: WaitingUser declares
+//     `joinedAt: { expires: 120 }` which creates a MongoDB TTL index that
+//     automatically purges stale documents. No manual cleanup needed here.
+//   - updateMany to reset zombie locks belongs in /join (before each match attempt),
+//     not here where it ran on every poll from every client
+//     (~33 write ops/s at 100 waiting users for zero benefit).
 router.get('/status', async (req, res) => {
   const { userId } = req.query || {};
   if (!userId) {
@@ -218,17 +227,6 @@ router.get('/status', async (req, res) => {
   }
 
   try {
-    // 1) Clean up conceptually expired entries and orphaned zombie locks
-    const activeCutoff = new Date(Date.now() - 120000);
-    const lockCutoff = new Date(Date.now() - 10000);
-
-    await WaitingUser.deleteMany({ joinedAt: { $lt: activeCutoff } });
-
-    await WaitingUser.updateMany(
-      { batchId: { $ne: null }, lockedAt: { $lt: lockCutoff } },
-      { $set: { batchId: null, lockedAt: null } }
-    );
-
     // First, check if user is in an active global room (and not in leftUsers).
     const room = await findRoomByUser(userId);
     if (room) {
@@ -261,7 +259,7 @@ router.get('/status', async (req, res) => {
       });
     }
 
-    // User is neither in a room nor in the waiting queue – treat as fresh waiting state.
+    // User is neither in a room nor in the waiting queue — treat as fresh waiting state.
     return res.json({
       status: 'waiting',
       queueSize,
@@ -295,6 +293,15 @@ router.post('/leave', async (req, res) => {
 // This updates the GDRoom.leftUsers field and marks the room completed
 // when all participants have left, so subsequent /status calls treat the
 // user as waiting for a fresh match.
+//
+// M2 FIX: The old pattern (read → push in JS → save) had a race where two
+// concurrent /leave-room calls could both read before either wrote, causing one
+// leave to be silently lost. Fixed with:
+//   1. $addToSet  — atomically adds userId, naturally idempotent (no double-add
+//      even under retries or double-click).
+//   2. $set: { status: 'completed' } — only applied when leftUsers count after
+//      the $addToSet equals or exceeds participants count, determined via the
+//      returned document from {new: true}.
 router.post('/leave-room', async (req, res) => {
   const { userId, roomId } = req.body || {};
   if (!userId || !roomId) {
@@ -302,30 +309,35 @@ router.post('/leave-room', async (req, res) => {
   }
 
   try {
-    const room = await GDRoom.findById(roomId);
+    // Step 1: Atomically add userId to leftUsers (idempotent via $addToSet).
+    // Only match global rooms to avoid touching unrelated rooms.
+    const afterAdd = await GDRoom.findOneAndUpdate(
+      { _id: roomId, mode: 'global' },
+      { $addToSet: { leftUsers: userId } },
+      { new: true }
+    );
+
     // If room does not exist or is not a global room, treat as a no-op.
-    if (!room || room.mode !== 'global') {
+    if (!afterAdd) {
       return res.json({ success: true });
     }
 
-    if (!Array.isArray(room.leftUsers)) {
-      room.leftUsers = [];
-    }
+    // Step 2: If all participants have now left, mark the room completed.
+    // We compare array lengths from the already-returned document — no extra read.
+    const allLeft = Array.isArray(afterAdd.participants) &&
+                    Array.isArray(afterAdd.leftUsers) &&
+                    afterAdd.leftUsers.length >= afterAdd.participants.length;
 
-    if (!room.leftUsers.includes(userId)) {
-      room.leftUsers.push(userId);
+    let finalStatus = afterAdd.status;
+    if (allLeft && afterAdd.status !== 'completed') {
+      await GDRoom.findByIdAndUpdate(roomId, { $set: { status: 'completed' } });
+      finalStatus = 'completed';
     }
-
-    if (Array.isArray(room.participants) && room.leftUsers.length >= room.participants.length) {
-      room.status = 'completed';
-    }
-
-    await room.save();
 
     return res.json({
       success: true,
-      status: room.status,
-      leftUsers: room.leftUsers,
+      status: finalStatus,
+      leftUsers: afterAdd.leftUsers,
     });
   } catch (e) {
     console.error('Error in /api/global-gd/leave-room', e);

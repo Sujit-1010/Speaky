@@ -2,6 +2,7 @@ const AIInterviewAnalysis = require('../models/AIInterviewAnalysis')
 const config = require('../config')
 const { analyzeInterview } = require('../services/groq.service')
 const { awardXP } = require('../services/xp.service')
+const pipelineLimiter = require('../services/pipelineLimiter.service')
 
 async function startInterviewAnalysis(req, res) {
   try {
@@ -43,6 +44,17 @@ async function startInterviewAnalysis(req, res) {
       { upsert: true, new: true }
     )
 
+    // M5: Enforce concurrency cap BEFORE sending the 201 response so we can
+    // legitimately return 503 if the cap is already at the limit.
+    // The analysis document is already persisted above (dedup is done) so the
+    // user can retry the POST without creating a duplicate.
+    if (!pipelineLimiter.acquire()) {
+      return res.status(503).json({
+        message: 'Analysis system is busy. Please try again in a moment.',
+        analysisId: analysis._id,
+      })
+    }
+
     res.status(201).json({
       analysisId: analysis._id,
       message: 'Analysis started'
@@ -50,13 +62,16 @@ async function startInterviewAnalysis(req, res) {
 
     // Run pipeline in background — intentionally not awaited.
     // .catch() ensures rejections are logged instead of silently lost.
+    // .finally() always releases the concurrency slot.
     runInterviewPipeline(
       analysis._id,
       req.app,
       userId, messages,
       interviewType, company, role,
       selectedTopics, resumeText
-    ).catch((err) => console.error('[interview-pipeline] unhandled rejection — analysisId:', analysis._id, err))
+    )
+      .catch((err) => console.error('[interview-pipeline] unhandled rejection — analysisId:', analysis._id, err))
+      .finally(() => pipelineLimiter.release())
 
   } catch (err) {
     console.error('Start interview analysis error:', err)
