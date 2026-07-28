@@ -10,7 +10,6 @@ import { QueryClientProvider } from '@tanstack/react-query'
 import { AnimatePresence, motion } from 'framer-motion'
 import { Route, BrowserRouter as Router, Routes, useLocation } from 'react-router-dom'
 import './App.css'
-import AppFooter from './components/navigation/AppFooter'
 import PageNotFound from './pages/PageNotFound'
 import { pagesConfig } from './pages.config'
 import FindingParticipants from './pages/FindingParticipants'
@@ -159,7 +158,6 @@ function App() {
             <NavigationTracker />
             <PushNotificationsManager />
             <AuthenticatedApp />
-            <AppFooter />
           </Router>
           <Toaster />
           <VisualEditAgent />
