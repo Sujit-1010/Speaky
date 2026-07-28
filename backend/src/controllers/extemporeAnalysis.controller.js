@@ -118,7 +118,9 @@ async function runExtemporePipeline(sessionId, app, userId, transcript, topic, d
     console.error('Extempore pipeline error:', err);
     try {
       await ExtemporeSession.findByIdAndUpdate(sessionId, { status: 'failed' });
-    } catch { }
+    } catch (e) {
+      console.error('[extemporeAnalysis] Failed to update session status to failed:', e?.message || e);
+    }
   }
 }
 

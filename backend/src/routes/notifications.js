@@ -63,7 +63,9 @@ router.post('/', auth, async (req, res) => {
             if (io && userId) {
                 io.to(`user:${userId}`).emit('notification_created', { notification: plain });
             }
-        } catch { }
+        } catch (err) {
+            console.error('[notifications] Socket notification emit error:', err?.message || err);
+        }
 
         // Web push via FCM (device-level)
         try {
@@ -92,7 +94,9 @@ router.post('/', auth, async (req, res) => {
                     }
                 });
             }
-        } catch { }
+        } catch (err) {
+            console.error('[notifications] FCM push notification error:', err?.message || err);
+        }
 
         res.status(201).json(plain);
     } catch (e) {

@@ -1,52 +1,13 @@
 const express = require('express');
 const rateLimit = require('express-rate-limit');
-const { RedisStore } = require('rate-limit-redis');
-const { getRedisClient } = require('../redisAdapter');
 const Tournament = require('../models/Tournament');
 const TournamentRegistration = require('../models/TournamentRegistration');
 const GDRoom = require('../models/GDRoom');
 const TournamentAccessToken = require('../models/TournamentAccessToken');
+const { makeLazyRedisStore } = require('../utils/redisStore');
+const { isExpired, getAccessTokenFromReq } = require('../utils/tokenHelpers');
 
 const router = express.Router();
-
-// Shared lazy-proxy store factory — same pattern as server.js.
-// Defers getRedisClient() until first request so Redis is already connected.
-function makeLazyRedisStore(prefix) {
-    let _store = null;
-    let _initialized = false;
-    let _rlOptions = null;
-
-    function getStore() {
-        if (!_initialized) {
-            const client = getRedisClient();
-            if (client) {
-                _store = new RedisStore({
-                    sendCommand: (...args) => client.sendCommand(args),
-                    prefix: `rl:${prefix}:`,
-                });
-            }
-            _initialized = true;
-        }
-        return _store;
-    }
-
-    return {
-        init(options) {
-            _rlOptions = options;
-            const s = getStore();
-            if (s && s.init) s.init(options);
-        },
-        async increment(key) {
-            const s = getStore();
-            if (!s) return { totalHits: 1, resetTime: new Date(Date.now() + (_rlOptions?.windowMs || 60000)) };
-            if (s._rlOptions === undefined && _rlOptions && s.init) s.init(_rlOptions);
-            return s.increment(key);
-        },
-        async decrement(key) { const s = getStore(); if (s) return s.decrement(key); },
-        async resetKey(key)  { const s = getStore(); if (s) return s.resetKey(key); },
-        async get(key)       { const s = getStore(); if (!s) return undefined; return s.get(key); },
-    };
-}
 
 // Primary IP-based limiter: caps total requests per IP regardless of token value.
 // Stops a scanner spraying random tokens from burning unlimited Mongo reads.
@@ -67,23 +28,12 @@ const panelRateLimit = rateLimit({
     windowMs: 60 * 1000,
     max: 20,
     store: makeLazyRedisStore('panel-token'),
-    keyGenerator: (req) => String(req.query.token || req.headers['x-access-token'] || req.ip || 'unknown'),
+    keyGenerator: (req) => String(getAccessTokenFromReq(req) || req.ip || 'unknown'),
     message: { message: 'Too many panel requests for this token. Please slow down.' },
     standardHeaders: true,
     legacyHeaders: false,
 });
 
-
-function isExpired(date) {
-    if (!date) return false;
-    try { return new Date(date).getTime() < Date.now(); } catch { return true; }
-}
-
-function getTokenFromReq(req) {
-    // Accepts ?token= query param (magic-link URL) or x-access-token header.
-    const header = req.headers['x-access-token'] || '';
-    return (header || req.query.token || '').toString().trim();
-}
 
 /**
  * GET /api/tournaments/:id/panel-data?token=<accessToken>
@@ -99,7 +49,7 @@ function getTokenFromReq(req) {
  */
 router.get('/:id/panel-data', ipRateLimit, panelRateLimit, async (req, res) => {
     try {
-        const tokenStr = getTokenFromReq(req);
+        const tokenStr = getAccessTokenFromReq(req);
         if (!tokenStr) {
             return res.status(401).json({ message: 'Missing access token' });
         }

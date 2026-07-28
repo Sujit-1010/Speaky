@@ -76,7 +76,7 @@ Return ONLY this exact JSON, no markdown, no extra text:
     console.log('=== Groq response status:', response.status)
     
     const rawText = response.data?.choices?.[0]?.message?.content || ''
-    console.log('=== Groq raw text:', rawText.substring(0, 300))
+    console.log('=== Groq response received, length:', rawText.length)
     
     // Clean and parse JSON
     const cleaned = rawText
@@ -172,7 +172,7 @@ Return ONLY valid JSON, no markdown:
     )
 
     const rawText = response.data?.choices?.[0]?.message?.content || ''
-    console.log('=== Interview Groq response:', rawText.substring(0, 200))
+    console.log('=== Interview Groq response received, length:', rawText.length)
 
     const cleaned = rawText
       .replace(/```json/g, '')
@@ -272,7 +272,7 @@ Return ONLY valid JSON. No markdown, no explanation, no extra text outside the J
     );
 
     const rawText = response.data?.choices?.[0]?.message?.content || '';
-    console.log('=== Extempore Groq response:', rawText.substring(0, 300));
+    console.log('=== Extempore Groq response received, length:', rawText.length);
 
     const cleaned = rawText
       .replace(/```json/g, '')

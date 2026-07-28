@@ -10,6 +10,5 @@ module.exports = {
     zegoAppId: Number(process.env.ZEGO_APP_ID || '0'),
     zegoServerSecret: process.env.ZEGO_SERVER_SECRET || '',
     zegoServerUrl: process.env.ZEGO_SERVER_URL || '',
-    zegoTokenExpirationSeconds: Number(process.env.ZEGO_TOKEN_EXPIRATION_TIME || '3600'),
-    deepgramLanguage: process.env.DEEPGRAM_LANG || 'en-US'
+    zegoTokenExpirationSeconds: Number(process.env.ZEGO_TOKEN_EXPIRATION_TIME || '3600')
 };

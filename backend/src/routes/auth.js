@@ -68,7 +68,7 @@ router.post('/firebase', async (req, res) => {
         let user = await User.findOne({ email });
         if (!user) {
             user = await User.create({ email, full_name: displayName, avatar: photoURL, auth_provider: 'google', firebase_uid });
-            try { await UserProfile.create({ user_id: user.email }); } catch { }
+            try { await UserProfile.create({ user_id: user.email }); } catch (err) { console.error('[auth] Profile creation error on Google login:', err?.message || err); }
         } else {
             const updates = {};
             if (!user.firebase_uid) updates.firebase_uid = firebase_uid;

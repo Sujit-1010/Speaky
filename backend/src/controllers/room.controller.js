@@ -1,10 +1,8 @@
 const Tournament = require('../models/Tournament');
 const GDRoom = require('../models/GDRoom');
 const AIInterview = require('../models/AIInterview');
-const {
-    getAccessTokenFromReq,
-    validateAccessTokenForTournament,
-} = require('./tournament.controller');
+const { validateAccessTokenForTournament } = require('./tournament.controller');
+const { getAccessTokenFromReq } = require('../utils/tokenHelpers');
 
 // ---------------------------------------------------------------------------
 // Private helper — checks whether the request comes from a valid organiser

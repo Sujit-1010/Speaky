@@ -33,6 +33,8 @@ const AnalysisSchema = new mongoose.Schema({
     audioUrl: { type: String },
     participantCount: { type: Number, default: 0 },
     errorReason: { type: String, default: null },
+    // Note: geminiUsed name is a legacy artifact from the Gemini-to-Groq migration.
+    // Kept intentionally as-is to avoid database migrations and breaking existing queries.
     geminiUsed: { type: Boolean, default: true },
     participationApprox: { type: Boolean, default: false },
     status: {

@@ -15,7 +15,9 @@ async function recalculateParticipationForSession({ sessionId, io }) {
                 const only = allParticipants[0];
                 try {
                     await Analysis.updateOne({ _id: only._id }, { $set: { participationApprox: true } });
-                } catch { }
+                } catch (err) {
+                    console.error('[analysis] recalculateParticipation single update error:', err?.message || err);
+                }
             }
             return;
         }
@@ -39,16 +41,22 @@ async function recalculateParticipationForSession({ sessionId, io }) {
 
                 try {
                     if (io && p.userId) io.to(`user:${p.userId}`).emit('analysis_updated', { sessionId: String(sessionId), message: 'Participation score updated' });
-                } catch { }
-            } catch { }
+                } catch (err) {
+                    console.error('[analysis] recalculateParticipation emit error:', err?.message || err);
+                }
+            } catch (err) {
+                console.error('[analysis] recalculateParticipation map item error:', err?.message || err);
+            }
         }));
-    } catch { }
+    } catch (err) {
+        console.error('[analysis] recalculateParticipationForSession error:', err?.message || err);
+    }
 }
 
 async function runAnalysisPipeline({ analysisId, sessionId, audioUrl, topic, duration, userId, io }) {
     console.log('=== runAnalysisPipeline started ===', {
         analysisId,
-        audioUrl,
+        hasAudioUrl: !!audioUrl,
         topic,
         duration
     })
@@ -82,10 +90,14 @@ async function runAnalysisPipeline({ analysisId, sessionId, audioUrl, topic, dur
                     { _id: analysisId },
                     { $set: { status: 'failed', errorReason: reason } }
                 );
-            } catch { }
+            } catch (err) {
+                console.error('[analysis] AssemblyAI failure status update error:', err?.message || err);
+            }
             try {
                 if (io && userId) io.to(`user:${userId}`).emit('analysis_failed', { analysisId: analysisId.toString(), userId, reason });
-            } catch { }
+            } catch (err) {
+                console.error('[analysis] AssemblyAI failure emit error:', err?.message || err);
+            }
             return;
         }
 
@@ -134,7 +146,9 @@ async function runAnalysisPipeline({ analysisId, sessionId, audioUrl, topic, dur
                     newLevel: xpResult.newLevel || 1,
                     leveledUp: xpResult.leveledUp || false
                 });
-            } catch { }
+            } catch (err) {
+                console.error('[analysis] no-speech analysis_ready emit error:', err?.message || err);
+            }
             return;
         }
 
@@ -145,7 +159,8 @@ async function runAnalysisPipeline({ analysisId, sessionId, audioUrl, topic, dur
         let groqUsed = true;
         try {
             groqResult = await analyzeWithGroq(transcript, topic);
-        } catch {
+        } catch (err) {
+            console.warn('[analysis] Groq analysis failed, using fallback:', err?.message || err);
             groqUsed = false;
             
             const wordCount = transcriptData?.text?.split(' ')?.length || 0;
@@ -207,7 +222,9 @@ async function runAnalysisPipeline({ analysisId, sessionId, audioUrl, topic, dur
             }
         );
 
-        recalculateParticipationForSession({ sessionId, io }).catch(() => { });
+        recalculateParticipationForSession({ sessionId, io }).catch((err) => {
+            console.error('[analysis] Background participation recalculation error:', err?.message || err);
+        });
 
         const { awardXP } = require('../services/xp.service');
         const overallScore = scores.overall || 0;
@@ -224,16 +241,22 @@ async function runAnalysisPipeline({ analysisId, sessionId, audioUrl, topic, dur
                 newLevel: xpResult.newLevel || 1,
                 leveledUp: xpResult.leveledUp || false
             });
-        } catch { }
+        } catch (err) {
+            console.error('[analysis] analysis_ready emit error:', err?.message || err);
+        }
     } catch (error) {
         console.error('Pipeline failed:', error);
         const msg = (config.nodeEnv !== 'production' && error?.message) ? error.message : (error?.code === 'missing_assemblyai_key' || error?.code === 'missing_groq_key' ? 'Analysis unavailable. Please contact administrator.' : 'Analysis failed');
         try {
             await Analysis.updateOne({ _id: analysisId }, { $set: { status: 'failed', errorReason: msg } });
-        } catch { }
+        } catch (err) {
+            console.error('[analysis] Pipeline failure DB update error:', err?.message || err);
+        }
         try {
             if (io && userId) io.to(`user:${userId}`).emit('analysis_failed', { analysisId: analysisId.toString(), userId, message: msg });
-        } catch { }
+        } catch (err) {
+            console.error('[analysis] Pipeline failure emit error:', err?.message || err);
+        }
     }
 }
 
@@ -244,7 +267,7 @@ async function uploadAudio(req, res) {
         userId: req.body?.userId
     });
     if (req.file) {
-        console.log('File details:', req.file);
+        console.log('File details:', { size: req.file.size, mimetype: req.file.mimetype });
     }
 
     if (!req.file || !req.file.path) {
@@ -258,11 +281,13 @@ async function uploadAudio(req, res) {
         try {
             console.log('Uploading to Cloudinary...');
             audioUrl = await uploadAudioToCloudinary(req.file.path, sessionId, userId);
-            console.log('Cloudinary upload success:', audioUrl);
+            console.log('Cloudinary upload success');
         } finally {
             try {
                 fs.unlinkSync(req.file.path);
-            } catch { }
+            } catch (err) {
+                console.warn('[analysis] Temp audio unlink error (cleanup):', err?.message || err);
+            }
         }
 
         return res.json({ success: true, audioUrl });
@@ -270,7 +295,9 @@ async function uploadAudio(req, res) {
         console.error('Upload audio error:', e?.message, e);
         try {
             fs.unlinkSync(req.file.path);
-        } catch { }
+        } catch (err) {
+            console.warn('[analysis] Temp audio unlink error (error cleanup):', err?.message || err);
+        }
         return res.status(500).json({ message: 'Audio upload failed' });
     }
 }

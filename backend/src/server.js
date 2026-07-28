@@ -43,11 +43,9 @@ const chatController = require('./controllers/chat.controller');
 const auth = require('./middleware/auth');
 const optionalAuth = require('./middleware/optionalAuth');
 const { RedisStore } = require('rate-limit-redis');
-// getRedisClient must be imported here (before makeLazyRedisStore is defined)
-// so it is in scope when express-rate-limit calls store.init() during rateLimit()
-// construction below. buildRedisAdapter is also imported here for convenience
-// (it is also referenced in the start() function further down).
 const { buildRedisAdapter, getRedisClient } = require('./redisAdapter');
+const { makeLazyRedisStore } = require('./utils/redisStore');
+const { initSocketHandlers } = require('./socket/socketHandlers');
 
 const app = express();
 
@@ -73,11 +71,13 @@ const corsOptions = {
                         // If a full origin was configured (with protocol), compare origins
                         const p = new URL(pat);
                         return p.origin === origin;
-                    } catch {
+                    } catch (e) {
+                        console.error('[CORS] Error parsing pattern URL:', pat, e?.message);
                         return false;
                     }
                 });
-            } catch {
+            } catch (e) {
+                console.error('[CORS] Error parsing origin URL:', origin, e?.message);
                 return false;
             }
         };
@@ -91,66 +91,7 @@ app.use(cors(corsOptions));
 app.use(express.json({ limit: '1mb' }));
 app.use(cookieParser());
 app.use(morgan('dev'));
-// ---------------------------------------------------------------------------
-// makeLazyRedisStore(prefix) — returns an express-rate-limit compatible store
-// that defers Redis client lookup until the first actual request.
-//
-// Why lazy? The rate limiters (rateLimit({...})) are defined at module parse
-// time, BEFORE start() connects Redis. By the time any HTTP request arrives,
-// buildRedisAdapter() has completed and getRedisClient() returns a live client.
-//
-// Fallback: if Redis is still null at request time (dev without Redis), the
-// proxy silently passes through — express-rate-limit then uses its default
-// in-memory counting. In production this never happens (hard startup fail).
-// ---------------------------------------------------------------------------
-function makeLazyRedisStore(prefix) {
-    let _store = null;
-    let _initialized = false;
 
-    function getStore() {
-        if (!_initialized) {
-            const client = getRedisClient();
-            if (client) {
-                _store = new RedisStore({
-                    sendCommand: (...args) => client.sendCommand(args),
-                    prefix: `rl:${prefix}:`,
-                });
-            }
-            _initialized = true;
-        }
-        return _store;
-    }
-
-    // express-rate-limit calls init() once when the middleware is first used.
-    return {
-        init(options) {
-            // Attempt to build the real store if Redis is already up.
-            // Re-init happens automatically on first request if not yet ready.
-            const s = getStore();
-            if (s && s.init) s.init(options);
-            this._rlOptions = options;
-        },
-        async increment(key) {
-            const s = getStore();
-            if (!s) return { totalHits: 1, resetTime: new Date(Date.now() + (this._rlOptions?.windowMs || 60000)) };
-            if (s._rlOptions === undefined && this._rlOptions && s.init) s.init(this._rlOptions);
-            return s.increment(key);
-        },
-        async decrement(key) {
-            const s = getStore();
-            if (s) return s.decrement(key);
-        },
-        async resetKey(key) {
-            const s = getStore();
-            if (s) return s.resetKey(key);
-        },
-        async get(key) {
-            const s = getStore();
-            if (!s) return undefined;
-            return s.get(key);
-        },
-    };
-}
 
 app.use(rateLimit({
     windowMs: 60 * 1000,
@@ -161,7 +102,8 @@ app.use(rateLimit({
             const url = String(req.originalUrl || req.url || '');
             return url.startsWith('/api/gd-rooms') ||
                    url.startsWith('/api/auth/me');
-        } catch {
+        } catch (e) {
+            console.error('[RateLimit] Error checking skip URL:', e?.message);
             return false;
         }
     }
@@ -311,93 +253,7 @@ const start = async () => {
         refreshTopics();
     });
 
-    io.on('connection', (socket) => {
-        console.log('User connected:', socket.id);
-
-        socket.on('join_room', (room) => {
-            socket.join(room);
-            console.log(`User ${socket.id} joined room ${room}`);
-        });
-
-        socket.on('register_user', (userId) => {
-            if (!userId) return;
-            const roomName = `user:${userId}`;
-            socket.join(roomName);
-            console.log(`User ${socket.id} registered room ${roomName}`);
-        });
-
-        socket.on('friend_request_notification', (payload) => {
-            if (!payload || !payload.to_user_id) return;
-            const roomName = `user:${payload.to_user_id}`;
-            io.to(roomName).emit('friend_request_notification', payload);
-        });
-
-        socket.on('room_invite_notification', (payload) => {
-            if (!payload || !payload.to_user_id) return;
-            const roomName = `user:${payload.to_user_id}`;
-            io.to(roomName).emit('room_invite_notification', payload);
-        });
-
-        socket.on('send_message', async (data, ack) => {
-            try {
-                const room = data && data.room;
-                const from_user_id = data && data.from_user_id;
-                const to_user_id = data && data.to_user_id;
-                const message = data && data.message;
-                const from_user_name = data && data.from_user_name;
-                if (!room || !from_user_id || !to_user_id || !message) {
-                    if (typeof ack === 'function') ack({ ok: false, error: 'missing_fields' });
-                    return;
-                }
-
-                // If client already persisted the message and provided id, accept it.
-                // Otherwise, persist here so sockets are the source of truth.
-                let doc = null;
-                if (data.id || data._id) {
-                    doc = data;
-                } else {
-                    const created = await ChatMessage.create({
-                        from_user_id: String(from_user_id),
-                        from_user_name: from_user_name || null,
-                        to_user_id: String(to_user_id),
-                        message: String(message),
-                        is_read: false,
-                    });
-                    const plain = created.toObject ? created.toObject() : created;
-                    doc = { ...plain, id: (plain._id || plain.id || '').toString() };
-                    delete doc._id;
-                    delete doc.__v;
-                }
-
-                const payload = { ...doc, room };
-
-                // Send to sender instantly
-                socket.emit('receive_message', payload);
-                // Send to everyone else in the room
-                socket.to(room).emit('receive_message', payload);
-
-                // For global UI unread badges
-                if (to_user_id) {
-                    const userRoom = `user:${to_user_id}`;
-                    io.to(userRoom).emit('chat_message_notification', payload);
-                }
-
-                if (typeof ack === 'function') ack({ ok: true, message: payload });
-            } catch (e) {
-                console.error('send_message error', e);
-                if (typeof ack === 'function') ack({ ok: false, error: 'server_error' });
-            }
-        });
-
-        socket.on('message_read', (payload = {}) => {
-            const { message_id, from_user_id, to_user_id } = payload;
-            if (!message_id || !from_user_id || !to_user_id) return;
-            const fromRoom = `user:${from_user_id}`;
-            const toRoom = `user:${to_user_id}`;
-            io.to(fromRoom).emit('message_read', payload);
-            io.to(toRoom).emit('message_read', payload);
-        });
-    });
+    initSocketHandlers(io);
 
     // Make io accessible in routes if needed
     app.set('io', io);

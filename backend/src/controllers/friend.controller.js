@@ -77,7 +77,9 @@ async function acceptFriendRequest(req, res) {
                 created_date: plain?.createdAt || plain?.created_date || plain?.created_at,
             };
             if (io && payload.user_id) io.to(`user:${payload.user_id}`).emit('notification_created', { notification: payload });
-        } catch { }
+        } catch (err) {
+            console.error('[friendController] Socket notification emit error:', err?.message || err);
+        }
 
         // FCM push — non-fatal if it fails
         try {
@@ -86,7 +88,9 @@ async function acceptFriendRequest(req, res) {
                 body: 'Your request was accepted',
                 data: { type: 'friend_request', from_user_id: fr.to_user_id },
             });
-        } catch { }
+        } catch (err) {
+            console.error('[friendController] FCM push error:', err?.message || err);
+        }
 
         res.json({ success: true });
     } catch (e) {

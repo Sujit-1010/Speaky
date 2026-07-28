@@ -4,6 +4,7 @@ const Tournament = require('../models/Tournament');
 const TournamentRegistration = require('../models/TournamentRegistration');
 const TournamentAccessToken = require('../models/TournamentAccessToken');
 const { sendTournamentRegistrationEmail, sendJudgeInviteEmail, sendTimeSlotEmail } = require('../utils/mailer');
+const { isExpired, getAccessTokenFromReq } = require('../utils/tokenHelpers');
 
 // ---------------------------------------------------------------------------
 // Private helpers
@@ -24,18 +25,7 @@ function getDefaultFrontendBase() {
     return 'http://localhost:5173';
 }
 
-function getAccessTokenFromReq(req) {
-    const header = req.headers['x-access-token'] || '';
-    const bearer = (req.headers['authorization'] || '').startsWith('Bearer ')
-        ? req.headers['authorization'].slice(7)
-        : '';
-    return (header || bearer || req.query.accessToken || (req.body && req.body.accessToken) || '').toString();
-}
 
-function isExpired(date) {
-    if (!date) return false;
-    try { return new Date(date).getTime() < Date.now(); } catch { return true; }
-}
 
 async function validateAccessTokenForTournament(tokenStr, tournamentId) {
     if (!tokenStr) return null;

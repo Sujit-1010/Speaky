@@ -20,8 +20,9 @@ module.exports = (req, res, next) => {
         try {
             const payload = jwt.verify(token, config.jwtSecret);
             req.user = { id: payload.id, email: payload.email };
-        } catch {
+        } catch (e) {
             // Invalid token — treat as unauthenticated; route handler decides.
+            console.debug('[optionalAuth] JWT verification failed (treating as unauthenticated):', e?.message || e);
         }
     }
     next();
