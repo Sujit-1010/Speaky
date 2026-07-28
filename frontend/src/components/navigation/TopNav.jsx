@@ -690,16 +690,23 @@ export default function TopNav({ activePage = 'Dashboard', user = null }) {
             </div>
           ) : (
             <div className="flex items-center gap-2 sm:gap-3">
-
               <Link
                 to={createPageUrl('Login')}
-                className="px-4 py-2.5 rounded-full font-bold text-gray-700 hover:bg-gray-100"
+                className={`px-4 py-2.5 rounded-full font-bold transition-all ${
+                  (activePage === 'Login' || location.pathname.toLowerCase() === '/login')
+                    ? 'bg-gradient-to-r from-purple-500 to-blue-500 text-white shadow-xl'
+                    : 'text-gray-700 hover:bg-gray-100'
+                }`}
               >
                 Log in
               </Link>
               <Link
                 to={createPageUrl('Register')}
-                className="px-4 py-2.5 rounded-full bg-gradient-to-r from-purple-500 to-blue-500 text-white font-bold shadow"
+                className={`px-4 py-2.5 rounded-full font-bold transition-all ${
+                  (activePage === 'Register' || location.pathname.toLowerCase() === '/register')
+                    ? 'bg-gradient-to-r from-purple-500 to-blue-500 text-white shadow-xl'
+                    : 'text-gray-700 hover:bg-gray-100'
+                }`}
               >
                 Sign Up
               </Link>
