@@ -9,6 +9,9 @@ export default function Login() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
+  const [isUnverified, setIsUnverified] = useState(false);
+  const [resendLoading, setResendLoading] = useState(false);
+  const [resendSuccess, setResendSuccess] = useState('');
   const [loading, setLoading] = useState(false);
   const [gLoading, setGLoading] = useState(false);
 
@@ -35,6 +38,8 @@ export default function Login() {
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError('');
+    setIsUnverified(false);
+    setResendSuccess('');
     setLoading(true);
     try {
       const emailOk = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(email);
@@ -44,14 +49,35 @@ export default function Login() {
       saveStreakPending(resp);
       window.location.href = redirect;
     } catch (err) {
-      setError(err.message || 'Login failed');
+      if (err?.status === 403 || err?.message?.toLowerCase?.()?.includes?.('verify your email')) {
+        setIsUnverified(true);
+        setError(err.message || 'Please verify your email before logging in.');
+      } else {
+        setError(err.message || 'Login failed');
+      }
     } finally {
       setLoading(false);
     }
   };
 
+  const handleResendVerification = async () => {
+    setResendSuccess('');
+    setResendLoading(true);
+    try {
+      if (!email) throw new Error('Please enter your email address');
+      const res = await api.auth.resendVerification({ email });
+      setResendSuccess(res?.message || 'Verification link sent! Please check your inbox.');
+    } catch (err) {
+      setError(err.message || 'Failed to resend verification email.');
+    } finally {
+      setResendLoading(false);
+    }
+  };
+
   const handleGoogle = async () => {
     setError('');
+    setIsUnverified(false);
+    setResendSuccess('');
     setGLoading(true);
     try {
       const { idToken } = await signInWithGooglePopup();
@@ -85,8 +111,26 @@ export default function Login() {
 
         <div className="rounded-2xl border border-slate-800/70 bg-slate-900/70 backdrop-blur p-6 shadow-xl">
           {error && (
-            <div className="mb-4 text-sm text-red-300 bg-red-900/30 border border-red-800 rounded px-3 py-2">
-              {error}
+            <div className="mb-4 text-sm text-red-300 bg-red-900/30 border border-red-800 rounded p-3 space-y-2">
+              <p>{error}</p>
+              {isUnverified && (
+                <div className="pt-1">
+                  <button
+                    type="button"
+                    onClick={handleResendVerification}
+                    disabled={resendLoading}
+                    className="px-3 py-1.5 text-xs font-semibold rounded-lg bg-red-800 hover:bg-red-700 text-white transition-colors disabled:opacity-50"
+                  >
+                    {resendLoading ? 'Sending...' : 'Resend Verification Email'}
+                  </button>
+                </div>
+              )}
+            </div>
+          )}
+
+          {resendSuccess && (
+            <div className="mb-4 text-sm text-emerald-300 bg-emerald-900/30 border border-emerald-800 rounded px-3 py-2">
+              {resendSuccess}
             </div>
           )}
           <form onSubmit={handleSubmit} className="space-y-4">

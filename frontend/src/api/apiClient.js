@@ -228,6 +228,12 @@ const auth = {
   async register({ email, password, full_name }) {
     return post('/api/auth/register', { email, password, full_name });
   },
+  async verifyEmail({ token }) {
+    return get(`/api/auth/verify-email?token=${encodeURIComponent(token)}`);
+  },
+  async resendVerification({ email }) {
+    return post('/api/auth/resend-verification', { email });
+  },
   async firebaseLogin({ idToken, full_name, avatar }) {
     return post('/api/auth/firebase', { idToken, full_name, avatar });
   },

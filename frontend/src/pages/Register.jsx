@@ -1,7 +1,7 @@
 import { api } from '@/api/apiClient';
 import { signInWithGooglePopup } from '@/lib/firebase';
 import { motion } from 'framer-motion';
-import { Chrome, Lock, Mail, User as UserIcon } from 'lucide-react';
+import { Chrome, Lock, Mail, User as UserIcon, CheckCircle2 } from 'lucide-react';
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
 
@@ -10,6 +10,7 @@ export default function Register() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
+  const [successNotice, setSuccessNotice] = useState('');
   const [loading, setLoading] = useState(false);
   const [gLoading, setGLoading] = useState(false);
 
@@ -20,6 +21,7 @@ export default function Register() {
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError('');
+    setSuccessNotice('');
     setLoading(true);
     try {
       // basic validation
@@ -27,8 +29,13 @@ export default function Register() {
       if (!fullName || fullName.trim().length < 2) throw new Error('Please enter your full name');
       if (!emailOk) throw new Error('Please enter a valid email');
       if (!password || password.length < 8) throw new Error('Password must be at least 8 characters');
-      await api.auth.register({ email, password, full_name: fullName });
-      window.location.href = redirect;
+      const res = await api.auth.register({ email, password, full_name: fullName });
+
+      if (res?.requiresVerification) {
+        setSuccessNotice(res?.message || 'Check your email to verify your account before logging in.');
+      } else {
+        window.location.href = redirect;
+      }
     } catch (err) {
       setError(err.message || 'Registration failed');
     } finally {
@@ -38,6 +45,7 @@ export default function Register() {
 
   const handleGoogle = async () => {
     setError('');
+    setSuccessNotice('');
     setGLoading(true);
     try {
       const { idToken, user } = await signInWithGooglePopup();
@@ -69,83 +77,103 @@ export default function Register() {
         </div>
 
         <div className="rounded-2xl border border-slate-800/70 bg-slate-900/70 backdrop-blur p-6 shadow-xl">
-          {error && (
-            <div className="mb-4 text-sm text-red-300 bg-red-900/30 border border-red-800 rounded px-3 py-2">
-              {error}
+          {successNotice ? (
+            <div className="py-4 text-center space-y-4">
+              <div className="w-14 h-14 mx-auto rounded-full bg-emerald-500/20 border border-emerald-500/40 flex items-center justify-center text-emerald-400">
+                <CheckCircle2 className="w-8 h-8" />
+              </div>
+              <h2 className="text-xl font-bold text-emerald-300">Check Your Email</h2>
+              <p className="text-sm text-slate-300">{successNotice}</p>
+              <div className="pt-2">
+                <Link
+                  to={redirectParam ? `/Login?redirect=${encodeURIComponent(redirectParam)}` : '/Login'}
+                  className="inline-block w-full py-3 rounded-xl bg-gradient-to-r from-purple-600 to-blue-600 font-bold text-center text-white shadow-lg hover:opacity-90 transition-opacity"
+                >
+                  Proceed to Sign In
+                </Link>
+              </div>
             </div>
+          ) : (
+            <>
+              {error && (
+                <div className="mb-4 text-sm text-red-300 bg-red-900/30 border border-red-800 rounded px-3 py-2">
+                  {error}
+                </div>
+              )}
+              <form onSubmit={handleSubmit} className="space-y-4">
+                <div>
+                  <label className="block text-sm mb-1" htmlFor="fullName">Full name</label>
+                  <div className="relative">
+                    <UserIcon className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                    <input
+                      id="fullName"
+                      type="text"
+                      value={fullName}
+                      onChange={(e) => setFullName(e.target.value)}
+                      className="w-full pl-9 pr-3 py-2 rounded-xl border border-slate-700 bg-slate-950 focus:outline-none focus:ring-2 focus:ring-purple-500"
+                      placeholder="Jane Doe"
+                      required
+                    />
+                  </div>
+                </div>
+                <div>
+                  <label className="block text-sm mb-1" htmlFor="email">Email</label>
+                  <div className="relative">
+                    <Mail className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                    <input
+                      id="email"
+                      type="email"
+                      value={email}
+                      onChange={(e) => setEmail(e.target.value)}
+                      className="w-full pl-9 pr-3 py-2 rounded-xl border border-slate-700 bg-slate-950 focus:outline-none focus:ring-2 focus:ring-purple-500"
+                      placeholder="you@example.com"
+                      required
+                    />
+                  </div>
+                </div>
+                <div>
+                  <label className="block text-sm mb-1" htmlFor="password">Password</label>
+                  <div className="relative">
+                    <Lock className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                    <input
+                      id="password"
+                      type="password"
+                      value={password}
+                      onChange={(e) => setPassword(e.target.value)}
+                      className="w-full pl-9 pr-3 py-2 rounded-xl border border-slate-700 bg-slate-950 focus:outline-none focus:ring-2 focus:ring-purple-500"
+                      placeholder="••••••••"
+                      required
+                    />
+                  </div>
+                </div>
+                <motion.button
+                  whileHover={{ scale: 1.01 }}
+                  whileTap={{ scale: 0.99 }}
+                  type="submit"
+                  disabled={loading}
+                  className="w-full mt-2 py-3 rounded-xl bg-gradient-to-r from-purple-600 to-blue-600 font-bold shadow-lg disabled:opacity-60 disabled:cursor-not-allowed"
+                >
+                  {loading ? 'Creating account...' : 'Create account'}
+                </motion.button>
+                <div className="relative py-1 text-center text-xs text-slate-400">or</div>
+                <motion.button
+                  whileHover={{ scale: 1.01 }}
+                  whileTap={{ scale: 0.99 }}
+                  type="button"
+                  onClick={handleGoogle}
+                  disabled={gLoading}
+                  className="w-full py-3 rounded-xl border border-slate-700 bg-slate-950 font-medium flex items-center justify-center gap-2 disabled:opacity-60 disabled:cursor-not-allowed"
+                >
+                  <Chrome className="w-4 h-4" />
+                  {gLoading ? 'Continuing...' : 'Continue with Google'}
+                </motion.button>
+              </form>
+              <p className="mt-4 text-sm text-center text-slate-300">
+                Already have an account?{' '}
+                <Link to={redirectParam ? `/Login?redirect=${encodeURIComponent(redirectParam)}` : '/Login'} className="text-blue-400 hover:underline">Sign in</Link>
+              </p>
+            </>
           )}
-          <form onSubmit={handleSubmit} className="space-y-4">
-            <div>
-              <label className="block text-sm mb-1" htmlFor="fullName">Full name</label>
-              <div className="relative">
-                <UserIcon className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-                <input
-                  id="fullName"
-                  type="text"
-                  value={fullName}
-                  onChange={(e) => setFullName(e.target.value)}
-                  className="w-full pl-9 pr-3 py-2 rounded-xl border border-slate-700 bg-slate-950 focus:outline-none focus:ring-2 focus:ring-purple-500"
-                  placeholder="Jane Doe"
-                  required
-                />
-              </div>
-            </div>
-            <div>
-              <label className="block text-sm mb-1" htmlFor="email">Email</label>
-              <div className="relative">
-                <Mail className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-                <input
-                  id="email"
-                  type="email"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  className="w-full pl-9 pr-3 py-2 rounded-xl border border-slate-700 bg-slate-950 focus:outline-none focus:ring-2 focus:ring-purple-500"
-                  placeholder="you@example.com"
-                  required
-                />
-              </div>
-            </div>
-            <div>
-              <label className="block text-sm mb-1" htmlFor="password">Password</label>
-              <div className="relative">
-                <Lock className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-                <input
-                  id="password"
-                  type="password"
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  className="w-full pl-9 pr-3 py-2 rounded-xl border border-slate-700 bg-slate-950 focus:outline-none focus:ring-2 focus:ring-purple-500"
-                  placeholder="••••••••"
-                  required
-                />
-              </div>
-            </div>
-            <motion.button
-              whileHover={{ scale: 1.01 }}
-              whileTap={{ scale: 0.99 }}
-              type="submit"
-              disabled={loading}
-              className="w-full mt-2 py-3 rounded-xl bg-gradient-to-r from-purple-600 to-blue-600 font-bold shadow-lg disabled:opacity-60 disabled:cursor-not-allowed"
-            >
-              {loading ? 'Creating account...' : 'Create account'}
-            </motion.button>
-            <div className="relative py-1 text-center text-xs text-slate-400">or</div>
-            <motion.button
-              whileHover={{ scale: 1.01 }}
-              whileTap={{ scale: 0.99 }}
-              type="button"
-              onClick={handleGoogle}
-              disabled={gLoading}
-              className="w-full py-3 rounded-xl border border-slate-700 bg-slate-950 font-medium flex items-center justify-center gap-2 disabled:opacity-60 disabled:cursor-not-allowed"
-            >
-              <Chrome className="w-4 h-4" />
-              {gLoading ? 'Continuing...' : 'Continue with Google'}
-            </motion.button>
-          </form>
-          <p className="mt-4 text-sm text-center text-slate-300">
-            Already have an account?{' '}
-            <Link to={redirectParam ? `/Login?redirect=${encodeURIComponent(redirectParam)}` : '/Login'} className="text-blue-400 hover:underline">Sign in</Link>
-          </p>
         </div>
       </motion.div>
     </div>

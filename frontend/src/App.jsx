@@ -51,6 +51,7 @@ const AuthenticatedApp = () => {
     p === '/privacy' ||
     p === '/login' ||
     p === '/register' ||
+    p === '/verify-email' ||
     p === '/organiser' ||
     p === '/judgepanel'
   );

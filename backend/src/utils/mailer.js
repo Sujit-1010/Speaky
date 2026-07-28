@@ -161,8 +161,45 @@ async function sendTimeSlotEmail({ to, userName, tournament, groupNumber, roomCo
     return info;
 }
 
+async function sendVerificationEmail({ to, userName, verificationUrl }) {
+    if (!transporter) {
+        const msg = 'Email transporter not configured. Set SMTP_USER/SMTP_PASS and restart the server.';
+        console.error(msg);
+        throw new Error(msg);
+    }
+    if (!to || !verificationUrl) {
+        throw new Error('Missing recipient or verification URL for email');
+    }
+    const subject = 'Verify your email address - SpeakUp';
+    const text = [
+        `Hello ${userName || ''},`,
+        `Thank you for registering with SpeakUp!`,
+        `Please confirm your email address by clicking the link below:`,
+        `${verificationUrl}`,
+        `This link will expire in 24 hours. If you did not sign up for an account, please ignore this email.`,
+        `Support: ${supportEmail}`,
+    ].join('\n');
+    const html = `
+    <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; background-color: #0f172a; color: #f8fafc; border-radius: 12px;">
+      <h2 style="color: #a855f7; margin-top: 0;">Welcome to SpeakUp!</h2>
+      <p>Hello ${userName || ''},</p>
+      <p>Thank you for signing up. Please verify your email address to activate your account and start practicing.</p>
+      <div style="margin: 30px 0; text-align: center;">
+        <a href="${verificationUrl}" style="background: linear-gradient(to right, #9333ea, #2563eb); color: #ffffff; padding: 12px 28px; text-decoration: none; font-weight: bold; border-radius: 8px; display: inline-block;">Verify Email Address</a>
+      </div>
+      <p style="font-size: 13px; color: #94a3b8;">Or copy and paste this link into your browser:</p>
+      <p style="font-size: 13px; color: #60a5fa; word-break: break-all;">${verificationUrl}</p>
+      <p style="font-size: 12px; color: #64748b; margin-top: 30px; border-top: 1px solid #1e293b; padding-top: 15px;">This link will expire in 24 hours. If you didn't create an account, you can safely ignore this email.</p>
+    </div>
+    `;
+    const info = await transporter.sendMail({ from: smtpUser, to, subject, text, html, replyTo: supportEmail || smtpUser });
+    return info;
+}
+
 module.exports = {
     sendTournamentRegistrationEmail,
     sendJudgeInviteEmail,
     sendTimeSlotEmail,
+    sendVerificationEmail,
 };
+

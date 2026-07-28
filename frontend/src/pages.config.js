@@ -39,6 +39,7 @@ import TournamentHub from './pages/TournamentHub';
 import TournamentLobby from './pages/TournamentLobby';
 
 import UserProfile from './pages/UserProfile';
+import VerifyEmail from './pages/VerifyEmail';
 
 export const PAGES = {
     "Landing": Landing,
@@ -76,6 +77,7 @@ export const PAGES = {
     "Call": Call,
     "Login": Login,
     "Register": Register,
+    "VerifyEmail": VerifyEmail,
     "Contact": Contact,
     "Terms": Terms,
     "Privacy": Privacy,
