@@ -81,8 +81,12 @@ export default function Login() {
     setResendSuccess('');
     setGLoading(true);
     try {
-      const { idToken } = await signInWithGooglePopup();
-      const resp = await api.auth.firebaseLogin({ idToken });
+      const { idToken, user } = await signInWithGooglePopup();
+      const resp = await api.auth.firebaseLogin({
+        idToken,
+        full_name: user?.displayName || undefined,
+        avatar: user?.photoURL || undefined,
+      });
       saveStreakPending(resp);
       window.location.href = redirect;
     } catch (err) {
