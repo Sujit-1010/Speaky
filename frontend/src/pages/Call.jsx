@@ -4,7 +4,7 @@ import { useToast } from '@/components/ui/use-toast';
 import useZegoCall from '@/hooks/useZegoCall';
 import { useAuth } from '@/lib/AuthContext';
 import { uploadAudioToBackend } from '@/services/storageService';
-import { AlertCircle, ArrowLeft, Circle, Clock, Mic, MicOff, PhoneOff, Play, ScrollText, Square, Video, VideoOff } from 'lucide-react';
+import { AlertCircle, ArrowLeft, Circle, Clock, Mic, MicOff, PhoneOff, Play, Square, Video, VideoOff } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { createPageUrl } from '../utils';
@@ -21,7 +21,10 @@ export default function Call() {
   const roomId = rawId && rawId !== 'null' && rawId !== 'undefined' ? rawId : null;
 
   const [room, setRoom] = useState(null);
-  const [timeLeft, setTimeLeft] = useState(0);
+  const [timeLeft, setTimeLeft] = useState(() => {
+    const dur = location.state?.duration;
+    return dur ? Number(dur) * 60 : 15 * 60;
+  });
   const didEndRef = useRef(false);
 
   const [localVideoEl, setLocalVideoEl] = useState(null);
@@ -630,11 +633,10 @@ export default function Call() {
   }, [isJoined, localStream]);
 
   useEffect(() => {
-    if (!timeLeft) return;
     const t = setInterval(() => {
       setTimeLeft((prev) => {
         if (prev <= 1) {
-          if (!didEndRef.current) {
+          if (prev === 1 && !didEndRef.current) {
             didEndRef.current = true;
             (async () => {
               try { await finalizeRecording({ download: true }); } catch {}
@@ -649,7 +651,7 @@ export default function Call() {
       });
     }, 1000);
     return () => clearInterval(t);
-  }, [timeLeft, navigate, leaveRoom, roomId]);
+  }, []);
 
   useEffect(() => {
     return () => {
@@ -889,13 +891,6 @@ export default function Call() {
           <span>{String(recordError)}</span>
         </div>
       )}
-
-      <div className="fixed right-3 top-24 z-40">
-        <div className="px-3 py-2 rounded-lg bg-white/10 text-white text-sm font-bold flex items-center gap-2 shadow-lg">
-          <ScrollText className="w-4 h-4" />
-          Transcript removed
-        </div>
-      </div>
     </div>
   );
 }

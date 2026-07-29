@@ -2,7 +2,7 @@ import { api } from '@/api/apiClient';
 import { useAuth } from '@/lib/AuthContext';
 import { useSocket } from '@/lib/SocketContext';
 import { AnimatePresence, motion } from 'framer-motion';
-import { Bell, Check, LogOut, Menu, MessageCircle, Search, User, UserPlus, X } from 'lucide-react';
+import { Bell, Check, LogOut, Menu, MessageCircle, Search, Send, User, UserPlus, Users, X } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
@@ -29,6 +29,12 @@ export default function TopNav({ activePage = 'Dashboard', user = null }) {
   const socket = useSocket();
   const [unreadChatCount, setUnreadChatCount] = useState(0);
   const [unreadByFriend, setUnreadByFriend] = useState({});
+  const [messagesTab, setMessagesTab] = useState('conversations'); // conversations | friends | invitations | sent
+  const [sentRequests, setSentRequests] = useState([]);
+  const [allUsers, setAllUsers] = useState([]);
+  const [friendSearch, setFriendSearch] = useState('');
+  const [friendSearchResult, setFriendSearchResult] = useState(null);
+  const [friendBusy, setFriendBusy] = useState(false);
 
   // Keep currentUser in sync with global auth state (handles logout, session expiry)
   useEffect(() => {
@@ -176,6 +182,17 @@ export default function TopNav({ activePage = 'Dashboard', user = null }) {
       });
       setFriendRequests(pendingRequests);
 
+      // Get sent friend requests
+      const sent = await api.entities.FriendRequest.filter({
+        from_user_id: me.email,
+        status: 'pending'
+      });
+      setSentRequests(sent);
+
+      // Get all users for search & mapping
+      const usersList = await api.entities.User.list();
+      setAllUsers(usersList);
+
       // Get notifications (all, newest first)
       const notifs = await api.entities.Notification.filter({ user_id: me.email }, '-created_date', 50);
       setNotifications(notifs);
@@ -200,8 +217,7 @@ export default function TopNav({ activePage = 'Dashboard', user = null }) {
       if (profileData.length > 0) {
         setMyProfile(profileData[0]);
         if (profileData[0].friends && profileData[0].friends.length > 0) {
-          const allUsers = await api.entities.User.list();
-          const friendList = allUsers.filter(u =>
+          const friendList = usersList.filter(u =>
             profileData[0].friends.includes(u.email) || profileData[0].friends.includes(u.id)
           );
           setFriends(friendList);
@@ -217,18 +233,82 @@ export default function TopNav({ activePage = 'Dashboard', user = null }) {
   };
 
   const acceptFriendRequest = async (request) => {
-    // Route through the server-side accept handler which atomically:
-    //   1. Updates FriendRequest status → 'accepted'
-    //   2. Adds each user to the other's friends list
-    //   3. Creates a Notification for the sender
-    //   4. Emits socket event + fires push to the sender
     await api.friendRequests.accept(request.id);
     setFriendRequests((prev) => (prev || []).filter((r) => r.id !== request.id));
+    loadNotifications();
   };
 
   const rejectFriendRequest = async (request) => {
     await api.friendRequests.reject(request.id);
     setFriendRequests((prev) => (prev || []).filter((r) => r.id !== request.id));
+  };
+
+  const searchFriend = async () => {
+    if (!friendSearch.trim()) return;
+    setFriendBusy(true);
+    try {
+      const q = friendSearch.trim().toLowerCase();
+      let users = allUsers;
+      if (!users || users.length === 0) {
+        users = await api.entities.User.list();
+        setAllUsers(users);
+      }
+      const results = (users || []).filter(u => {
+        if (u.email === currentUser?.email || u.id === currentUser?.id) return false;
+        const email = (u.email || '').toLowerCase();
+        const name = (u.full_name || '').toLowerCase();
+        return u.id === friendSearch.trim() || email === q || email.includes(q) || name.includes(q);
+      });
+      setFriendSearchResult(results[0] || null);
+    } finally {
+      setFriendBusy(false);
+    }
+  };
+
+  const addFriend = async () => {
+    if (!myProfile || !friendSearchResult || !currentUser) return;
+    const target = friendSearchResult;
+    const targetEmail = target.email || target.id;
+    const current = myProfile.friends || [];
+    if (current.includes(targetEmail) || current.includes(target.id)) return;
+    const exists = await api.entities.FriendRequest.filter({ from_user_id: currentUser.email, to_user_id: targetEmail, status: 'pending' });
+    if (exists.length > 0) {
+      setFriendSearch('');
+      setFriendSearchResult(null);
+      return;
+    }
+    const fr = await api.entities.FriendRequest.create({
+      from_user_id: currentUser.email,
+      from_user_name: currentUser.full_name,
+      to_user_id: targetEmail,
+      status: 'pending'
+    });
+    await api.entities.Notification.create({
+      user_id: targetEmail,
+      type: 'friend_request',
+      title: 'New Friend Request',
+      message: `${currentUser.full_name} sent you a friend request`,
+      from_user_id: currentUser.email,
+      is_read: false
+    });
+    setSentRequests([fr, ...sentRequests]);
+    setFriendSearch('');
+    setFriendSearchResult(null);
+    setMessagesTab('sent');
+  };
+
+  const removeFriend = async (fid) => {
+    if (!myProfile) return;
+    const current = myProfile.friends || [];
+    const updated = current.filter(f => f !== fid);
+    await api.entities.UserProfile.update(myProfile.id, { friends: updated });
+    setMyProfile({ ...myProfile, friends: updated });
+    setFriends(prev => (prev || []).filter(u => u.email !== fid && u.id !== fid));
+  };
+
+  const cancelRequest = async (request) => {
+    try { await api.entities.FriendRequest.delete(request.id); } catch {}
+    setSentRequests((prev) => (prev || []).filter((r) => r.id !== request.id));
   };
 
 
@@ -529,7 +609,7 @@ export default function TopNav({ activePage = 'Dashboard', user = null }) {
                 )}
               </div>
 
-              {/* Chat Sidebar Portal */}
+              {/* Chat & Friends Sidebar Portal */}
               {createPortal(
                 <AnimatePresence>
                   {showChat && (
@@ -542,7 +622,7 @@ export default function TopNav({ activePage = 'Dashboard', user = null }) {
                         exit={{ opacity: 0 }}
                         transition={{ duration: 0.2 }}
                         className="fixed inset-0 bg-black/40 z-[998]"
-                        onClick={() => { setShowChat(false); setChatSearch(''); }}
+                        onClick={() => { setShowChat(false); setChatSearch(''); setFriendSearchResult(null); }}
                       />
 
                       {/* Sidebar */}
@@ -556,9 +636,9 @@ export default function TopNav({ activePage = 'Dashboard', user = null }) {
                       >
                         {/* Header */}
                         <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100">
-                          <h2 className="text-xl font-black text-gray-900">Messages</h2>
+                          <h2 className="text-xl font-black text-gray-900">Messages & Friends</h2>
                           <button
-                            onClick={() => { setShowChat(false); setChatSearch(''); }}
+                            onClick={() => { setShowChat(false); setChatSearch(''); setFriendSearchResult(null); }}
                             className="p-2 rounded-full hover:bg-gray-100 transition-all"
                             aria-label="Close messages"
                           >
@@ -566,70 +646,299 @@ export default function TopNav({ activePage = 'Dashboard', user = null }) {
                           </button>
                         </div>
 
-                        {/* Search bar */}
-                        <div className="px-5 py-3">
-                          <div className="flex items-center gap-2 px-3 py-2 bg-gray-100 rounded-xl">
-                            <Search className="w-4 h-4 text-gray-400 shrink-0" />
-                            <input
-                              type="text"
-                              value={chatSearch}
-                              onChange={(e) => setChatSearch(e.target.value)}
-                              placeholder="Search conversations..."
-                              className="flex-1 bg-transparent text-sm text-gray-700 placeholder-gray-400 outline-none"
-                            />
-                          </div>
+                        {/* Icon Tab Bar */}
+                        <div className="flex items-center justify-around px-3 py-2.5 bg-gray-50 border-b border-gray-100">
+                          <button
+                            onClick={() => setMessagesTab('conversations')}
+                            className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold transition-all relative ${
+                              messagesTab === 'conversations'
+                                ? 'bg-purple-600 text-white shadow-md'
+                                : 'text-gray-600 hover:bg-gray-200'
+                            }`}
+                            title="Conversations"
+                          >
+                            <MessageCircle className="w-4 h-4" />
+                            <span>Chats</span>
+                            {unreadChatCount > 0 && (
+                              <span className="ml-1 px-1.5 py-0.5 bg-red-500 text-white rounded-full text-[10px] font-extrabold">
+                                {unreadChatCount}
+                              </span>
+                            )}
+                          </button>
+
+                          <button
+                            onClick={() => setMessagesTab('friends')}
+                            className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold transition-all relative ${
+                              messagesTab === 'friends'
+                                ? 'bg-purple-600 text-white shadow-md'
+                                : 'text-gray-600 hover:bg-gray-200'
+                            }`}
+                            title="Friends"
+                          >
+                            <Users className="w-4 h-4" />
+                            <span>Friends</span>
+                          </button>
+
+                          <button
+                            onClick={() => setMessagesTab('invitations')}
+                            className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold transition-all relative ${
+                              messagesTab === 'invitations'
+                                ? 'bg-purple-600 text-white shadow-md'
+                                : 'text-gray-600 hover:bg-gray-200'
+                            }`}
+                            title="Invitations"
+                          >
+                            <UserPlus className="w-4 h-4" />
+                            <span>Invites</span>
+                            {friendRequests.length > 0 && (
+                              <span className="ml-1 px-1.5 py-0.5 bg-red-500 text-white rounded-full text-[10px] font-extrabold animate-pulse">
+                                {friendRequests.length}
+                              </span>
+                            )}
+                          </button>
+
+                          <button
+                            onClick={() => setMessagesTab('sent')}
+                            className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold transition-all relative ${
+                              messagesTab === 'sent'
+                                ? 'bg-purple-600 text-white shadow-md'
+                                : 'text-gray-600 hover:bg-gray-200'
+                            }`}
+                            title="Sent Requests"
+                          >
+                            <Send className="w-4 h-4" />
+                            <span>Sent</span>
+                            {sentRequests.length > 0 && (
+                              <span className="ml-1 px-1.5 py-0.5 bg-gray-400 text-white rounded-full text-[10px] font-extrabold">
+                                {sentRequests.length}
+                              </span>
+                            )}
+                          </button>
                         </div>
 
-                        {/* Friends list */}
-                        <div className="flex-1 overflow-y-auto px-3 pb-4">
-                          {friends.length > 0 ? (() => {
-                            const filtered = friends.filter(f =>
-                              !chatSearch.trim() ||
-                              f.full_name?.toLowerCase().includes(chatSearch.trim().toLowerCase())
-                            );
-                            return filtered.length > 0 ? (
-                              <div className="space-y-1">
-                                {filtered.map((friend) => (
+                        {/* Content Area */}
+                        <div className="flex-1 overflow-y-auto px-4 py-3 space-y-4">
+                          {/* 1. Conversations Tab */}
+                          {messagesTab === 'conversations' && (
+                            <>
+                              <div className="flex items-center gap-2 px-3 py-2 bg-gray-100 rounded-xl mb-3">
+                                <Search className="w-4 h-4 text-gray-400 shrink-0" />
+                                <input
+                                  type="text"
+                                  value={chatSearch}
+                                  onChange={(e) => setChatSearch(e.target.value)}
+                                  placeholder="Search conversations..."
+                                  className="flex-1 bg-transparent text-sm text-gray-700 placeholder-gray-400 outline-none"
+                                />
+                              </div>
+
+                              {friends.length > 0 ? (() => {
+                                const filtered = friends.filter(f =>
+                                  !chatSearch.trim() ||
+                                  f.full_name?.toLowerCase().includes(chatSearch.trim().toLowerCase())
+                                );
+                                return filtered.length > 0 ? (
+                                  <div className="space-y-1">
+                                    {filtered.map((friend) => (
+                                      <button
+                                        key={friend.id}
+                                        onClick={() => openChat(friend.email)}
+                                        className="w-full flex items-center gap-3 p-3 rounded-xl hover:bg-gray-50 active:bg-gray-100 transition-all group"
+                                      >
+                                        <div className="relative shrink-0">
+                                          <div className="w-11 h-11 rounded-full bg-gradient-to-br from-purple-500 to-blue-500 flex items-center justify-center text-white font-bold text-base shadow">
+                                            {friend.full_name?.charAt(0)?.toUpperCase() || 'U'}
+                                          </div>
+                                          <span className="absolute bottom-0 right-0 w-3 h-3 bg-green-500 border-2 border-white rounded-full" />
+                                        </div>
+
+                                        <div className="flex-1 text-left min-w-0">
+                                          <p className="font-bold text-gray-900 text-sm truncate">{friend.full_name}</p>
+                                          <p className="text-xs text-gray-500">Click to chat</p>
+                                        </div>
+
+                                        {(unreadByFriend[friend.email] || unreadByFriend[friend.id]) > 0 && (
+                                          <span className="shrink-0 inline-flex items-center justify-center w-5 h-5 rounded-full bg-red-500 text-white text-[10px] font-bold">
+                                            {unreadByFriend[friend.email] || unreadByFriend[friend.id]}
+                                          </span>
+                                        )}
+                                      </button>
+                                    ))}
+                                  </div>
+                                ) : (
+                                  <div className="text-center py-16 text-gray-400">
+                                    <Search className="w-8 h-8 mx-auto mb-2 opacity-40" />
+                                    <p className="text-sm">No results for "{chatSearch}"</p>
+                                  </div>
+                                );
+                              })() : (
+                                <div className="text-center py-16 text-gray-400">
+                                  <UserPlus className="w-10 h-10 mx-auto mb-3 opacity-40" />
+                                  <p className="text-sm font-medium">No friends yet</p>
+                                  <p className="text-xs mt-1">Switch to Friends tab to search and add friends!</p>
+                                </div>
+                              )}
+                            </>
+                          )}
+
+                          {/* 2. Friends Tab */}
+                          {messagesTab === 'friends' && (
+                            <div className="space-y-4">
+                              <div className="space-y-2">
+                                <p className="text-xs font-bold text-gray-400 uppercase tracking-wide">Add New Friend</p>
+                                <div className="flex gap-2">
+                                  <div className="flex-1 flex items-center gap-2 px-3 py-2 bg-gray-100 rounded-xl">
+                                    <Search className="w-4 h-4 text-gray-400 shrink-0" />
+                                    <input
+                                      type="text"
+                                      value={friendSearch}
+                                      onChange={(e) => setFriendSearch(e.target.value)}
+                                      placeholder="Search by name or email"
+                                      className="flex-1 bg-transparent text-sm text-gray-700 outline-none"
+                                    />
+                                  </div>
                                   <button
-                                    key={friend.id}
-                                    onClick={() => openChat(friend.email)}
-                                    className="w-full flex items-center gap-3 p-3 rounded-xl hover:bg-gray-50 active:bg-gray-100 transition-all group"
+                                    onClick={searchFriend}
+                                    disabled={friendBusy || !friendSearch.trim()}
+                                    className="px-3 py-2 bg-purple-600 text-white text-xs font-bold rounded-xl hover:bg-purple-700 disabled:opacity-50"
                                   >
-                                    {/* Avatar */}
-                                    <div className="relative shrink-0">
-                                      <div className="w-11 h-11 rounded-full bg-gradient-to-br from-purple-500 to-blue-500 flex items-center justify-center text-white font-bold text-base shadow">
-                                        {friend.full_name?.charAt(0)?.toUpperCase() || 'U'}
-                                      </div>
-                                      {/* Online dot (static green; replace with real presence if available) */}
-                                      <span className="absolute bottom-0 right-0 w-3 h-3 bg-green-500 border-2 border-white rounded-full" />
-                                    </div>
-
-                                    {/* Info */}
-                                    <div className="flex-1 text-left min-w-0">
-                                      <p className="font-bold text-gray-900 text-sm truncate">{friend.full_name}</p>
-                                      <p className="text-xs text-gray-500">Click to chat</p>
-                                    </div>
-
-                                    {/* Unread badge */}
-                                    {(unreadByFriend[friend.email] || unreadByFriend[friend.id]) > 0 && (
-                                      <span className="shrink-0 inline-flex items-center justify-center w-5 h-5 rounded-full bg-red-500 text-white text-[10px] font-bold">
-                                        {unreadByFriend[friend.email] || unreadByFriend[friend.id]}
-                                      </span>
-                                    )}
+                                    Search
                                   </button>
-                                ))}
+                                </div>
+
+                                {friendSearchResult && (
+                                  <div className="flex items-center justify-between p-3 rounded-xl bg-purple-50 border border-purple-100">
+                                    <div className="min-w-0 flex-1">
+                                      <p className="font-bold text-sm text-gray-900 truncate">{friendSearchResult.full_name || 'User'}</p>
+                                      <p className="text-xs text-gray-500 truncate">{friendSearchResult.email}</p>
+                                    </div>
+                                    <button
+                                      onClick={addFriend}
+                                      className="px-3 py-1.5 bg-green-500 hover:bg-green-600 text-white text-xs font-bold rounded-lg flex items-center gap-1 shrink-0 ml-2"
+                                    >
+                                      <UserPlus className="w-3.5 h-3.5" />
+                                      Send Request
+                                    </button>
+                                  </div>
+                                )}
                               </div>
-                            ) : (
-                              <div className="text-center py-16 text-gray-400">
-                                <Search className="w-8 h-8 mx-auto mb-2 opacity-40" />
-                                <p className="text-sm">No results for "{chatSearch}"</p>
+
+                              <div>
+                                <p className="text-xs font-bold text-gray-400 uppercase tracking-wide mb-2">My Friends ({friends.length})</p>
+                                {friends.length > 0 ? (
+                                  <div className="space-y-2">
+                                    {friends.map((friend) => {
+                                      const fid = friend.email || friend.id;
+                                      return (
+                                        <div key={fid} className="flex items-center justify-between p-3 rounded-xl bg-gray-50 border border-gray-100">
+                                          <div className="flex items-center gap-3 min-w-0 flex-1">
+                                            <div className="w-9 h-9 rounded-full bg-gradient-to-br from-purple-500 to-blue-500 flex items-center justify-center text-white font-bold text-xs shrink-0">
+                                              {friend.full_name?.charAt(0)?.toUpperCase() || 'U'}
+                                            </div>
+                                            <div className="min-w-0 flex-1">
+                                              <p className="font-bold text-sm text-gray-900 truncate">{friend.full_name}</p>
+                                              <p className="text-xs text-gray-500 truncate">{friend.email}</p>
+                                            </div>
+                                          </div>
+                                          <div className="flex items-center gap-1 shrink-0">
+                                            <button
+                                              onClick={() => openChat(friend.email)}
+                                              className="p-2 rounded-lg bg-purple-50 hover:bg-purple-100 text-purple-600"
+                                              title="Message"
+                                            >
+                                              <MessageCircle className="w-4 h-4" />
+                                            </button>
+                                            <button
+                                              onClick={() => removeFriend(fid)}
+                                              className="p-2 rounded-lg bg-red-50 hover:bg-red-100 text-red-600"
+                                              title="Remove Friend"
+                                            >
+                                              <X className="w-4 h-4" />
+                                            </button>
+                                          </div>
+                                        </div>
+                                      );
+                                    })}
+                                  </div>
+                                ) : (
+                                  <p className="text-xs text-gray-400 italic">No friends added yet.</p>
+                                )}
                               </div>
-                            );
-                          })() : (
-                            <div className="text-center py-16 text-gray-400">
-                              <UserPlus className="w-10 h-10 mx-auto mb-3 opacity-40" />
-                              <p className="text-sm font-medium">No friends yet</p>
-                              <p className="text-xs mt-1">Add friends from the leaderboard!</p>
+                            </div>
+                          )}
+
+                          {/* 3. Invitations Tab */}
+                          {messagesTab === 'invitations' && (
+                            <div>
+                              <p className="text-xs font-bold text-gray-400 uppercase tracking-wide mb-2">Incoming Requests ({friendRequests.length})</p>
+                              {friendRequests.length > 0 ? (
+                                <div className="space-y-2">
+                                  {friendRequests.map((req) => (
+                                    <div key={req.id} className="p-3 bg-purple-50 rounded-xl border border-purple-100">
+                                      <div className="flex items-center gap-3 mb-2">
+                                        <div className="w-9 h-9 rounded-full bg-gradient-to-br from-purple-500 to-blue-500 flex items-center justify-center text-white font-bold text-xs shrink-0">
+                                          {req.from_user_name?.charAt(0)?.toUpperCase() || 'U'}
+                                        </div>
+                                        <div className="min-w-0 flex-1">
+                                          <p className="font-bold text-sm text-gray-900 truncate">{req.from_user_name || req.from_user_id}</p>
+                                          <p className="text-xs text-gray-500 truncate">{req.from_user_id}</p>
+                                        </div>
+                                      </div>
+                                      <div className="flex gap-2">
+                                        <button
+                                          onClick={() => acceptFriendRequest(req)}
+                                          className="flex-1 py-1.5 rounded-lg bg-green-500 text-white font-bold text-xs flex items-center justify-center gap-1 hover:bg-green-600 transition-all"
+                                        >
+                                          <Check className="w-3.5 h-3.5" />
+                                          Accept
+                                        </button>
+                                        <button
+                                          onClick={() => rejectFriendRequest(req)}
+                                          className="flex-1 py-1.5 rounded-lg bg-gray-200 text-gray-700 font-bold text-xs flex items-center justify-center gap-1 hover:bg-gray-300 transition-all"
+                                        >
+                                          <X className="w-3.5 h-3.5" />
+                                          Decline
+                                        </button>
+                                      </div>
+                                    </div>
+                                  ))}
+                                </div>
+                              ) : (
+                                <div className="text-center py-16 text-gray-400">
+                                  <UserPlus className="w-10 h-10 mx-auto mb-3 opacity-30" />
+                                  <p className="text-sm font-medium">No pending invitations</p>
+                                </div>
+                              )}
+                            </div>
+                          )}
+
+                          {/* 4. Sent Tab */}
+                          {messagesTab === 'sent' && (
+                            <div>
+                              <p className="text-xs font-bold text-gray-400 uppercase tracking-wide mb-2">Sent Requests ({sentRequests.length})</p>
+                              {sentRequests.length > 0 ? (
+                                <div className="space-y-2">
+                                  {sentRequests.map((req) => (
+                                    <div key={req.id} className="flex items-center justify-between p-3 rounded-xl bg-gray-50 border border-gray-100">
+                                      <div className="min-w-0 flex-1">
+                                        <p className="font-bold text-sm text-gray-900 truncate">To: {req.to_user_id}</p>
+                                        <p className="text-xs text-purple-600 font-semibold">Pending</p>
+                                      </div>
+                                      <button
+                                        onClick={() => cancelRequest(req)}
+                                        className="px-3 py-1.5 rounded-lg bg-red-50 hover:bg-red-100 text-red-600 text-xs font-bold"
+                                      >
+                                        Cancel
+                                      </button>
+                                    </div>
+                                  ))}
+                                </div>
+                              ) : (
+                                <div className="text-center py-16 text-gray-400">
+                                  <Send className="w-10 h-10 mx-auto mb-3 opacity-30" />
+                                  <p className="text-sm font-medium">No sent requests</p>
+                                </div>
+                              )}
                             </div>
                           )}
                         </div>
